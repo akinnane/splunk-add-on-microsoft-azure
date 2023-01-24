@@ -1,0 +1,2 @@
+pytest
+-r ../package/lib/requirements.txt

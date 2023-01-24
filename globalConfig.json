@@ -2290,6 +2290,192 @@
                 },
                 {
                     "template": "input_with_helper",
+                    "name": "azure_cloud_defender",
+                    "title": "Azure Cloud Defender",
+                    "entity": [
+                        {
+                            "field": "name",
+                            "label": "Name",
+                            "type": "text",
+                            "help": "Enter a unique name for the data input",
+                            "required": true,
+                            "validators": [
+                                {
+                                    "type": "regex",
+                                    "pattern": "^[a-zA-Z]\\w*$",
+                                    "errorMsg": "Input Name must start with a letter and followed by alphabetic letters, digits or underscores."
+                                },
+                                {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100,
+                                    "errorMsg": "Length of input name should be between 1 and 100"
+                                }
+                            ]
+                        },
+                        {
+                            "field": "interval",
+                            "label": "Interval",
+                            "type": "text",
+                            "required": true,
+                            "defaultValue": 86400,
+                            "help": "Time interval of input in seconds.",
+                            "validators": [
+                                {
+                                    "type": "regex",
+                                    "pattern": "^\\-[1-9]\\d*$|^\\d*$",
+                                    "errorMsg": "Interval must be an integer."
+                                }
+                            ]
+                        },
+                        {
+                            "field": "index",
+                            "label": "Index",
+                            "type": "singleSelect",
+                            "defaultValue": "default",
+                            "options": {
+                                "endpointUrl": "data/indexes",
+                                "createSearchChoice": true,
+                                "denyList": "^_.*$"
+                            },
+                            "required": true,
+                            "validators": [
+                                {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 80,
+                                    "errorMsg": "Length of index name should be between 1 and 80."
+                                }
+                            ]
+                        },
+                        {
+                            "field": "azure_app_account",
+                            "label": "Azure App Account",
+                            "help": "",
+                            "required": true,
+                            "type": "singleSelect",
+                            "options": {
+                                "referenceName": "account"
+                            }
+                        },
+                        {
+                            "field": "tenant_id",
+                            "label": "Tenant ID",
+                            "help": "",
+                            "required": true,
+                            "type": "text",
+                            "validators": [
+                                {
+                                    "type": "string",
+                                    "minLength": 0,
+                                    "maxLength": 8192,
+                                    "errorMsg": "Max length of text input is 8192"
+                                }
+                            ]
+                        },
+                        {
+                            "field": "environment",
+                            "label": "Environment",
+                            "help": "",
+                            "required": true,
+                            "type": "singleSelect",
+                            "defaultValue": "public",
+                            "options": {
+                                "disableSearch": true,
+                                "autoCompleteFields": [
+                                    {
+                                        "value": "public",
+                                        "label": "Azure Public"
+                                    },
+                                    {
+                                        "value": "gov",
+                                        "label": "Azure Government"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "field": "collect_subscriptions",
+                            "label": "Collect Subscriptions",
+                            "help": "",
+                            "required": false,
+                            "type": "checkbox"
+                        },
+                        {
+                            "field": "source_type",
+                            "label": "Subscription Sourcetype",
+                            "help": "",
+                            "required": true,
+                            "type": "text",
+                            "defaultValue": "azure:subscriptions",
+                            "validators": [
+                                {
+                                    "type": "string",
+                                    "minLength": 0,
+                                    "maxLength": 8192,
+                                    "errorMsg": "Max length of text input is 8192"
+                                }
+                            ],
+                            "options": {
+                                "placeholder": "azure:subscriptions"
+                            }
+                        },
+                        {
+                            "field": "collect_security_center_alerts",
+                            "label": "Collect Security Center Alerts",
+                            "help": "",
+                            "required": false,
+                            "type": "checkbox"
+                        },
+                        {
+                            "field": "security_alert_sourcetype",
+                            "label": "Security Alert Sourcetype",
+                            "help": "",
+                            "required": true,
+                            "type": "text",
+                            "defaultValue": "azure:securityCenter:alert",
+                            "validators": [
+                                {
+                                    "type": "string",
+                                    "minLength": 0,
+                                    "maxLength": 8192,
+                                    "errorMsg": "Max length of text input is 8192"
+                                }
+                            ],
+                            "options": {
+                                "placeholder": "azure:securityCenter:alert"
+                            }
+                        },
+                        {
+                            "field": "collect_security_center_tasks",
+                            "label": "Collect Security Center Tasks",
+                            "help": "",
+                            "required": false,
+                            "type": "checkbox"
+                        },
+                        {
+                            "field": "security_task_sourcetype",
+                            "label": "Security Task Sourcetype",
+                            "help": "",
+                            "required": true,
+                            "type": "text",
+                            "defaultValue": "azure:securityCenter:task",
+                            "validators": [
+                                {
+                                    "type": "string",
+                                    "minLength": 0,
+                                    "maxLength": 8192,
+                                    "errorMsg": "Max length of text input is 8192"
+                                }
+                            ],
+                            "options": {
+                                "placeholder": "azure:securityCenter:task"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "template": "input_with_helper",
                     "name": "azure_resource_group",
                     "title": "Azure Resource Groups",
                     "entity": [
