@@ -27,6 +27,7 @@ def acd():
         "environment": "global",
         "collect_security_center_alerts": True,
         "collect_security_center_tasks": True,
+        "security_task_sourcetype": "azure:securitycenter:task",
     }
 
     acd.input_stanzas["someapp"] = azure_app_account
@@ -54,4 +55,5 @@ def test_can_instantiate(acd):
 
 
 def test_acd_collect_events(acd, ew):
-    acd.collect_events(ew)
+    print(acd.collect_events(ew))
+    assert false

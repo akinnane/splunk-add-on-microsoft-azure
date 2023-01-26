@@ -323,7 +323,9 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
             for subscription_id in self.subscription_ids(subscripitons):
                 tasks = self.get_tasks(subscription_id)
 
-            self.write_events(event_writer, tasks, self.alert_metadata())
+            self.write_events(event_writer, tasks, self.task_metadata())
+
+        return tasks
 
     def get_account_fields(self):
         account_fields = []
