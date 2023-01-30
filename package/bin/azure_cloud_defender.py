@@ -130,6 +130,24 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                 required_on_edit=False,
             )
         )
+        scheme.add_argument(
+            smi.Argument(
+                "collect_security_assessments",
+                title="Collect Security Assessments",
+                description="",
+                required_on_create=False,
+                required_on_edit=False,
+            )
+        )
+        scheme.add_argument(
+            smi.Argument(
+                "security_assessment_sourcetype",
+                title="Security Assessment Sourcetype",
+                description="",
+                required_on_create=True,
+                required_on_edit=False,
+            )
+        )
         return scheme
 
     def get_app_name(self):
@@ -241,6 +259,103 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         )
         return tasks
 
+    def assessments_url(self, subscription_id, check_point=None):
+        url = f"{self.management_base_url()}/subscriptions/{subscription_id}/providers/Microsoft.Security/assessments?api-version=2020-01-01"
+        if check_point:
+            url += f"&$filter=Properties/LastStateChangeTimeUtc gt {check_point}"
+        return url
+
+    def assessments_metadata(self):
+        """Metadata for Defender Task Splunk ingestion"""
+        return {
+            "sourcetype": self.get_arg("security_assessment_sourcetype"),
+            "index": self.get_output_index(),
+            "source": f"{self.input_type}",
+        }
+
+    def get_assessments(self, subscription_id):
+        """Get security center tasks"""
+        # check_point_key = f"asc_tasks_last_date_{self.get_input_stanza_names()}"
+        # check_point = self.get_check_point(check_point_key)
+        url = self.assessments_url(subscription_id, None)
+        # event_date_key = "lastStateChangeTimeUtc"
+        tasks = self.get_items(url)
+        self.log_debug(f"get_tasks() url={url} tasks={len(tasks)}")
+        return tasks
+
+    def assessments_url(self, subscription_id, check_point=None):
+        url = f"{self.management_base_url()}/subscriptions/{subscription_id}/providers/Microsoft.Security/assessments?api-version=2020-01-01"
+        if check_point:
+            url += f"&$filter=Properties/LastStateChangeTimeUtc gt {check_point}"
+        return url
+
+    def assessments_metadata(self):
+        """Metadata for Defender Task Splunk ingestion"""
+        return {
+            "sourcetype": self.get_arg("security_assessment_sourcetype"),
+            "index": self.get_output_index(),
+            "source": f"{self.input_type}",
+        }
+
+    def get_assessments(self, subscription_id):
+        """Get security center tasks"""
+        # check_point_key = f"asc_tasks_last_date_{self.get_input_stanza_names()}"
+        # check_point = self.get_check_point(check_point_key)
+        url = self.assessments_url(subscription_id, None)
+        # event_date_key = "lastStateChangeTimeUtc"
+        assessments = self.get_items(url)
+        self.log_debug(f"get_assessments() url={url} tasks={len(assessments)}")
+        return assessments
+
+    def contacts_url(self, subscription_id, check_point=None):
+        url = f"{self.management_base_url()}/subscriptions/{subscription_id}/providers/Microsoft.Security/securityContacts?api-version=2020-01-01-preview"
+        if check_point:
+            url += f"&$filter=Properties/LastStateChangeTimeUtc gt {check_point}"
+        return url
+
+    def contacts_metadata(self):
+        """Metadata for Defender Task Splunk ingestion"""
+        return {
+            "sourcetype": "azure:security:contacts",
+            "index": self.get_output_index(),
+            "source": f"{self.input_type}",
+        }
+
+    def get_contacts(self, subscription_id):
+        """Get security center tasks"""
+        # check_point_key = f"asc_tasks_last_date_{self.get_input_stanza_names()}"
+        # check_point = self.get_check_point(check_point_key)
+        url = self.contacts_url(subscription_id, None)
+        # event_date_key = "lastStateChangeTimeUtc"
+        print(f"get_contacts() url={url}")
+        contacts = self.get_items(url)
+        self.log_debug(f"get_contacts() url={url} tasks={len(contacts)}")
+        return contacts
+
+    def secure_score_url(self, subscription_id, check_point=None):
+        url = f"{self.management_base_url()}/subscriptions/{subscription_id}/providers/Microsoft.Security/secureScores?api-version=2020-01-01"
+        if check_point:
+            url += f"&$filter=Properties/LastStateChangeTimeUtc gt {check_point}"
+        return url
+
+    def secure_score_metadata(self):
+        """Metadata for Defender Task Splunk ingestion"""
+        return {
+            "sourcetype": "azure:security:secure_score",
+            "index": self.get_output_index(),
+            "source": f"{self.input_type}",
+        }
+
+    def get_secure_score(self, subscription_id):
+        """Get security center tasks"""
+        # check_point_key = f"asc_tasks_last_date_{self.get_input_stanza_names()}"
+        # check_point = self.get_check_point(check_point_key)
+        url = self.secure_score_url(subscription_id, None)
+        # event_date_key = "lastStateChangeTimeUtc"
+        secure_score = self.get_items(url)
+        self.log_debug(f"get_secure_score() url={url} tasks={len(secure_score)}")
+        return secure_score
+
     def get_items(self, url):
         """Get all items from an endpoint"""
         response = azutils.get_items_batch_session(
@@ -308,24 +423,44 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
 
     def collect_events(self, event_writer):
         """Poll for all subscriptions then iterrate through each and get alerts and tasks"""
-        subscripitons = self.get_subscriptions()
+        subscriptions = self.get_subscriptions()
 
         if self.get_arg("collect_subscriptions"):
-            self.write_events(event_writer, subscripitons, self.subscription_metadata())
+            self.write_events(event_writer, subscriptions, self.subscription_metadata())
 
         if self.get_arg("collect_security_center_alerts"):
-            for subscription_id in self.subscription_ids(subscripitons):
+            for subscription_id in self.subscription_ids(subscriptions):
                 alerts = self.get_alerts(subscription_id)
 
             self.write_events(event_writer, alerts, self.alert_metadata())
 
         if self.get_arg("collect_security_center_tasks"):
-            for subscription_id in self.subscription_ids(subscripitons):
+            for subscription_id in self.subscription_ids(subscriptions):
                 tasks = self.get_tasks(subscription_id)
 
             self.write_events(event_writer, tasks, self.task_metadata())
 
-        return tasks
+        if self.get_arg("collect_security_assessments"):
+            for subscription_id in self.subscription_ids(subscriptions):
+                assessments = self.get_assessments(subscription_id)
+
+            self.write_events(event_writer, assessments, self.assessments_metadata())
+
+        # Azure API response doesn't match documentation
+        # https://learn.microsoft.com/en-us/rest/api/defenderforcloud/security-contacts/list?tabs=HTTP
+        if False:
+            for subscription_id in self.subscription_ids(subscriptions):
+                contacts = self.get_contacts(subscription_id)
+
+            self.write_events(event_writer, contacts, self.contacts_metadata())
+
+        if True:
+            for subscription_id in self.subscription_ids(subscriptions):
+                secure_score = self.get_secure_score(subscription_id)
+
+            self.write_events(event_writer, secure_score, self.secure_score_metadata())
+
+        return (subscriptions, alerts, tasks, assessments, contacts, secure_score)
 
     def get_account_fields(self):
         account_fields = []
