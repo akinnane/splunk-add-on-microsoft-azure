@@ -62,6 +62,11 @@ def test_can_instantiate(acd):
     assert acd
 
 
+def test_get_scheme(acd):
+    scheme = acd.get_scheme()
+    assert scheme
+
+
 def test_assessment_metadata(acd):
     md = acd.assessments_metadata()
     expected = {
@@ -83,7 +88,6 @@ def test_aassessment_url(acd):
 def test_get_assessments(acd, sub_ids):
     for sub_id in sub_ids:
         assessments = acd.get_assessments(sub_id)
-        print(assessments)
         assert assessments
 
 
@@ -91,12 +95,10 @@ def test_get_assessments(acd, sub_ids):
 def test_get_contacts(acd, sub_ids):
     for sub_id in sub_ids:
         contacts = acd.get_contacts(sub_id)
-        print(contacts)
         assert contacts
 
 
 def test_get_secure_score(acd, sub_ids):
     for sub_id in sub_ids:
         secure_score = acd.get_secure_score(sub_id)
-        print(secure_score)
         assert secure_score
