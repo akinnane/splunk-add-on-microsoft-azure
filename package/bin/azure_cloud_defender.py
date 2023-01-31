@@ -425,7 +425,7 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         """Poll for all subscriptions then iterrate through each and get alerts and tasks"""
         subscriptions = self.get_subscriptions()
 
-        if self.get_arg("collect_subscriptions"):
+        if False # self.get_arg("collect_subscriptions"):
             self.write_events(event_writer, subscriptions, self.subscription_metadata())
 
         if self.get_arg("collect_security_center_alerts"):
