@@ -223,7 +223,9 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         }
 
     def get_alerts(self, subscription_id):
-        check_point_key = f"asc_alert_last_date_{self.get_input_stanza_names()}"
+        check_point_key = (
+            f"asc_alert_last_date_{self.get_input_stanza_names()}_{subscription_id}"
+        )
         check_point = self.get_check_point(check_point_key)
         url = self.alert_url(subscription_id, check_point)
         event_date_key = "timeGeneratedUtc"
@@ -249,7 +251,9 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
 
     def get_tasks(self, subscription_id):
         """Get security center tasks"""
-        check_point_key = f"asc_tasks_last_date_{self.get_input_stanza_names()}"
+        check_point_key = (
+            f"asc_tasks_last_date_{self.get_input_stanza_names()}_{subscription_id}"
+        )
         check_point = self.get_check_point(check_point_key)
         url = self.task_url(subscription_id, check_point)
         event_date_key = "lastStateChangeTimeUtc"
@@ -425,26 +429,27 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         """Poll for all subscriptions then iterrate through each and get alerts and tasks"""
         subscriptions = self.get_subscriptions()
 
-        if False: # self.get_arg("collect_subscriptions"):
+        if False:  # self.get_arg("collect_subscriptions"):
             self.write_events(event_writer, subscriptions, self.subscription_metadata())
 
         if self.get_arg("collect_security_center_alerts"):
             for subscription_id in self.subscription_ids(subscriptions):
                 alerts = self.get_alerts(subscription_id)
 
-            self.write_events(event_writer, alerts, self.alert_metadata())
+                self.write_events(event_writer, alerts, self.alert_metadata())
 
         if self.get_arg("collect_security_center_tasks"):
             for subscription_id in self.subscription_ids(subscriptions):
                 tasks = self.get_tasks(subscription_id)
 
-            self.write_events(event_writer, tasks, self.task_metadata())
+                self.write_events(event_writer, tasks, self.task_metadata())
 
         if self.get_arg("collect_security_assessments"):
             for subscription_id in self.subscription_ids(subscriptions):
                 assessments = self.get_assessments(subscription_id)
-
-            self.write_events(event_writer, assessments, self.assessments_metadata())
+                self.write_events(
+                    event_writer, assessments, self.assessments_metadata()
+                )
 
         # Azure API response doesn't match documentation
         # https://learn.microsoft.com/en-us/rest/api/defenderforcloud/security-contacts/list?tabs=HTTP
