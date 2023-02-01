@@ -57,6 +57,7 @@ def sub_ids(acd):
     return acd.subscription_ids(subscriptions)
 
 
+# Base Class
 def test_can_instantiate(acd):
     acd = azure_cloud_defender.ModInputAzureCloudDefender()
     assert acd
@@ -67,18 +68,21 @@ def test_get_scheme(acd):
     assert scheme
 
 
+# Assessments
+
+
 def test_assessment_metadata(acd):
-    md = acd.assessments_metadata()
+    md = acd.assessments_metadata("sub_id123")
     expected = {
         "sourcetype": "azure:security:assessment",
-        "source": "azure_cloud_defender",
+        "source": "azure_cloud_defender:sub_id123",
         "index": None,
     }
 
     assert md == expected
 
 
-def test_aassessment_url(acd):
+def test_assessment_url(acd):
     subid = "subid123"
     url = acd.assessments_url(subid)
     expected = f"https://management.azure.com/subscriptions/{subid}/providers/Microsoft.Security/assessments?api-version=2020-01-01"
@@ -91,6 +95,9 @@ def test_get_assessments(acd, sub_ids):
         assert assessments
 
 
+# Contacts
+
+
 @pytest.mark.skip(reason="Azure API response doesn't match documentation")
 def test_get_contacts(acd, sub_ids):
     for sub_id in sub_ids:
@@ -98,7 +105,59 @@ def test_get_contacts(acd, sub_ids):
         assert contacts
 
 
+# Secure Score
 def test_get_secure_score(acd, sub_ids):
     for sub_id in sub_ids:
         secure_score = acd.get_secure_score(sub_id)
         assert secure_score
+
+
+# Assessments Metadata
+def test_sub_assessment_metadata(acd):
+    md = acd.sub_assessments_metadata("sub_id123")
+    expected = {
+        "sourcetype": "azure:security:sub_assessment",
+        "source": "azure_cloud_defender:sub_id123",
+        "index": None,
+    }
+
+    assert md == expected
+
+
+# Sub assessments
+def test_sub_assessment_url(acd):
+    subid = "subid123"
+    url = acd.sub_assessments_url(subid)
+    expected = f"https://management.azure.com/subscriptions/{subid}/providers/Microsoft.Security/subAssessments?api-version=2019-01-01-preview"
+    assert expected == url
+
+
+def test_get_sub_assessments(acd, sub_ids):
+    for sub_id in sub_ids:
+        sub_assessments = acd.get_sub_assessments(sub_id)
+        assert sub_assessments
+
+
+# Assessment metadata
+def test_assessment_metadata_metadata(acd):
+    md = acd.assessment_metadata_metadata("sub_id123")
+    expected = {
+        "sourcetype": "azure:security:assessment_metadata",
+        "source": "azure_cloud_defender:sub_id123",
+        "index": None,
+    }
+
+    assert md == expected
+
+
+def test_assessment__metadata_url(acd):
+    subid = "subid123"
+    url = acd.assessment_metadata_url(subid)
+    expected = f"https://management.azure.com/subscriptions/{subid}/providers/Microsoft.Security/assessmentMetadata?api-version=2020-01-01"
+    assert expected == url
+
+
+def test_get_assessment_metadata(acd, sub_ids):
+    for sub_id in sub_ids:
+        assessment_metadata = acd.get_assessment_metadata(sub_id)
+        assert assessment_metadata
