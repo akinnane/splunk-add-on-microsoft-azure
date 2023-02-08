@@ -1,6 +1,8 @@
 import os
 import pytest
 import azure_cloud_defender
+from pprint import pprint
+import json
 
 
 @pytest.fixture
@@ -10,7 +12,8 @@ def ew():
             pass
 
         def write_event(self, event):
-            print(event)
+            # pprint(event)
+            pass
 
     return EventWriter()
 
@@ -89,6 +92,7 @@ def test_assessment_url(acd):
     assert expected == url
 
 
+@pytest.mark.live
 def test_get_assessments(acd, sub_ids):
     for sub_id in sub_ids:
         assessments = acd.get_assessments(sub_id)
@@ -106,6 +110,7 @@ def test_get_contacts(acd, sub_ids):
 
 
 # Secure Score
+@pytest.mark.live
 def test_get_secure_score(acd, sub_ids):
     for sub_id in sub_ids:
         secure_score = acd.get_secure_score(sub_id)
@@ -116,7 +121,7 @@ def test_get_secure_score(acd, sub_ids):
 def test_sub_assessment_metadata(acd):
     md = acd.sub_assessments_metadata("sub_id123")
     expected = {
-        "sourcetype": "azure:security:sub_assessment",
+        "sourcetype": "azure:security:sub_assessments",
         "source": "azure_cloud_defender:sub_id123",
         "index": None,
     }
@@ -132,6 +137,7 @@ def test_sub_assessment_url(acd):
     assert expected == url
 
 
+@pytest.mark.live
 def test_get_sub_assessments(acd, sub_ids):
     for sub_id in sub_ids:
         sub_assessments = acd.get_sub_assessments(sub_id)
@@ -157,7 +163,15 @@ def test_assessment__metadata_url(acd):
     assert expected == url
 
 
+@pytest.mark.live
 def test_get_assessment_metadata(acd, sub_ids):
     for sub_id in sub_ids:
         assessment_metadata = acd.get_assessment_metadata(sub_id)
         assert assessment_metadata
+
+
+@pytest.mark.live
+def test_process_events(acd, ew):
+    events = acd.collect_events(ew)
+    pprint(events)
+    assert False

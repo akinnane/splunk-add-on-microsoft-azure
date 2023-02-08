@@ -2441,7 +2441,7 @@
                             "help": "",
                             "required": true,
                             "type": "text",
-                            "defaultValue": "azure:securityCenter:alert",
+                            "defaultValue": "azure:security:alert",
                             "validators": [
                                 {
                                     "type": "string",
@@ -2451,7 +2451,7 @@
                                 }
                             ],
                             "options": {
-                                "placeholder": "azure:securityCenter:alert"
+                                "placeholder": "azure:security:alert"
                             }
                         },
                         {
@@ -2467,7 +2467,7 @@
                             "help": "",
                             "required": true,
                             "type": "text",
-                            "defaultValue": "azure:securityCenter:task",
+                            "defaultValue": "azure:security:task",
                             "validators": [
                                 {
                                     "type": "string",
@@ -2477,7 +2477,7 @@
                                 }
                             ],
                             "options": {
-                                "placeholder": "azure:securityCenter:task"
+                                "placeholder": "azure:security:task"
                             }
                         },
                         {

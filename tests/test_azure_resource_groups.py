@@ -25,7 +25,7 @@ def arg():
         },
         "tenant_id": os.environ["azure_tenant_id"],
         "environment": "global",
-        "subscription_id": "63ed7111-101c-4849-9f33-03ef672ed20d",
+        "subscription_id": os.environ.get("subscription_id", "default_id"),
     }
 
     arg.input_stanzas["someapp"] = azure_app_account
@@ -51,13 +51,15 @@ def test_can_instantiate(arg):
     assert arg
 
 
+@pytest.mark.live
 def test_arg_collect_events(arg, ew):
-    events = arg.get_resource_groups("63ed7111-101c-4849-9f33-03ef672ed20d")
+    events = arg.get_resource_groups("TODO")
     print(events)
     assert events
     assert len(events) == 3
 
 
+@pytest.mark.live
 def test_arg_collect_events(arg, ew):
     events = arg.collect_events(ew)
     print(events)

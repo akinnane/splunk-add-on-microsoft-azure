@@ -21,12 +21,12 @@ import os
 import sys
 
 import import_declare_test
-
-from splunklib import modularinput as smi
-from splunktaucclib.modinput_wrapper import base_modinput as base_mi
-
 import ta_azure_utils.auth as azauth
 import ta_azure_utils.utils as azutils
+from splunklib import modularinput as smi
+from splunktaucclib.modinput_wrapper import base_modinput as base_mi
+from datetime import datetime
+from datetime import timedelta
 
 bin_dir = os.path.basename(__file__)
 
@@ -37,6 +37,7 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         super().__init__("ta_ms_aad", "azure_cloud_defender", use_single_instance)
         self.global_checkbox_fields = None
         self.session = None
+        self.session_start_time = datetime.now()
 
     def get_scheme(self):
         """overloaded splunklib modularinput method"""
@@ -159,8 +160,15 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
     def get_session(self):
         """Create an Azure session"""
         self.logger.debug("Getting Azure session")
-        if self.session:
+
+        session_timedout = (
+            timedelta(minutes=30) > self.session_start_time - datetime.now()
+        )
+
+        if self.session and session_timedout:
             return self.session
+
+        self.logger.debug("Creating Azure session")
 
         global_account = self.get_arg("azure_app_account")
         tenant_id = self.get_arg("tenant_id")
@@ -178,6 +186,7 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
             raise RuntimeError("No Azure Session")
 
         self.session = session
+        self.session_start_time = datetime.now()
 
         return session
 
@@ -297,9 +306,27 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         """Metadata for Defender Task Splunk ingestion"""
         return {
             # "sourcetype": self.get_arg("security_assessment_sourcetype"),
-            "sourcetype": "azure:security:sub_assessment",
+            "sourcetype": "azure:security:sub_assessments",
             "index": self.get_output_index(),
             "source": f"{self.input_type}:{sub_id}",
+        }
+
+    def sub_assessment_metadata(self, sub_id, assessment_id):
+        """Metadata for Defender Task Splunk ingestion"""
+        return {
+            # "sourcetype": self.get_arg("security_assessment_sourcetype"),
+            "sourcetype": "azure:security:sub_assessment",
+            "index": self.get_output_index(),
+            "source": f"{self.input_type}:subscription:{sub_id}:assessment_id:{assessment_id}",
+        }
+
+    def task_sub_assessment_metadata(self, sub_id, task_id):
+        """Metadata for Defender Task Splunk ingestion"""
+        return {
+            # "sourcetype": self.get_arg("security_assessment_sourcetype"),
+            "sourcetype": "azure:security:sub_assessment",
+            "index": self.get_output_index(),
+            "source": f"{self.input_type}:subscription:{sub_id}:task_id:{task_id}",
         }
 
     def get_sub_assessments(self, subscription_id):
@@ -371,7 +398,7 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
 
     # def get_assessments(self, subscription_id):
     #     """Get security center tasks"""
-    #     # check_point_key = f"asc_tasks_last_date_{self.get_input_stanza_names()}"
+    #     # check_point_key = f"asc_tasks_st_date_{self.get_input_stanza_names()}"
     #     # check_point = self.get_check_point(check_point_key)
     #     url = self.assessments_url(subscription_id, None)
     #     # event_date_key = "lastStateChangeTimeUtc"
@@ -380,7 +407,7 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
     #     return assessments
 
     def contacts_url(self, subscription_id, check_point=None):
-        url = f"{self.management_base_url()}/subscriptions/{subscription_id}/providers/Microsoft.Security/securityContacts?api-version=2020-01-01-preview"
+        url = f"{self.management_base_url()}/subscriptions/{subscription_id}/providers/Microsoft.SecuritysecurityContacts?api-version=2020-01-01-preview"
         if check_point:
             url += f"&$filter=Properties/LastStateChangeTimeUtc gt {check_point}"
         return url
@@ -493,110 +520,284 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
             event_writer.write_event(event)
         sys.stdout.flush()
 
-    def collect_events(self, event_writer):
-        """Poll for all subscriptions then iterrate through each and get alerts and tasks"""
-        subscriptions = self.get_subscriptions()
+    def smash_events(self):
 
         return_value = {}
 
-        if False:  # self.get_arg("collect_subscriptions"):
-            self.write_events(event_writer, subscriptions, self.subscription_metadata())
+        return_value.update({"tasks": {}})
+        return_value.update({"assessments": {}})
+        return_value.update({"assessment_metadata": {}})
 
-        if self.get_arg("collect_security_center_alerts"):
-            return_value.update({"alerts": {}})
-            for subscription_id in self.subscription_ids(subscriptions):
-                alerts = self.get_alerts(subscription_id)
+        subscriptions = self.get_subscriptions()
 
-                self.write_events(event_writer, alerts, self.alert_metadata())
+        for subscription_id in self.subscription_ids(subscriptions):
 
-                return_value["alerts"].update({subscription_id: alerts})
+            assessments = self.get_assessments(subscription_id)
+            return_value["assessments"].update({subscription_id: assessments})
 
-        if self.get_arg("collect_security_center_tasks"):
-            return_value.update({"tasks": {}})
-            for subscription_id in self.subscription_ids(subscriptions):
-                tasks = self.get_tasks(subscription_id)
+            assessment_metadata = self.get_assessment_metadata(subscription_id)
+            return_value["assessment_metadata"].update(
+                {subscription_id: assessment_metadata}
+            )
 
-                self.write_events(event_writer, tasks, self.task_metadata())
-
-                return_value["tasks"].update({subscription_id: tasks})
-
-        if self.get_arg("collect_security_assessments"):
-            return_value.update({"assessments": {}})
-            return_value.update({"sub_assessments": {}})
-            return_value.update({"assessment_metadata": {}})
-
-            for subscription_id in self.subscription_ids(subscriptions):
-                assessments = self.get_assessments(subscription_id)
-                self.write_events(
-                    event_writer,
-                    assessments,
-                    self.assessments_metadata(subscription_id),
+            for assessment in assessments:
+                assessment_sub_assessments_link = (
+                    assessment.get("properties", {})
+                    .get("additionalData", {})
+                    .get("subAssessmentsLink", "")
                 )
 
-                return_value["assessments"].update({subscription_id: assessments})
+                if not assessment_sub_assessments_link:
+                    continue
 
-                for assessment in assessments:
-                    if "properties" not in assessment:
-                        continue
-                    if "additionalData" not in assessment["properties"]:
-                        continue
-                    if (
-                        "subAssessmentsLink"
-                        not in assessment["properties"]["additionalData"]
-                    ):
-                        continue
-
-                    sub_assessment = self.get_sub_assessment(
-                        subscription_id, assessment["name"]
-                    )
-
-                    self.write_events(
-                        event_writer,
-                        sub_assessment,
-                        self.sub_assessments_metadata(subscription_id),
-                    )
-
-                sub_assessments = self.get_sub_assessments(subscription_id)
-                self.write_events(
-                    event_writer,
-                    sub_assessments,
-                    self.sub_assessments_metadata(subscription_id),
-                )
-                return_value["sub_assessments"].update(
-                    {subscription_id: sub_assessments}
+                assessment_sub_assessments = self.get_sub_assessment(
+                    subscription_id, assessment["name"]
                 )
 
-                assessment_metadata = self.get_assessment_metadata(subscription_id)
-                self.write_events(
-                    event_writer,
-                    assessment_metadata,
-                    self.assessment_metadata_metadata(subscription_id),
+                if not assessment_sub_assessments:
+                    continue
+
+                assessment_sub_assessments = [
+                    i.update({"AK_SOURCE": f"assessment_id:{assessment['id']}"})
+                    for i in assessment_sub_assessments
+                ]
+
+                assessment.update(
+                    {"assessment_sub_assessments": assessment_sub_assessments}
                 )
-                return_value["assessment_metadata"].update(
-                    {subscription_id: assessment_metadata}
+
+            tasks = self.get_tasks(subscription_id)
+            return_value["tasks"].update({subscription_id: tasks})
+
+            for task in tasks:
+                details = (
+                    task.get("properties", {})
+                    .get("securityTaskParameters", {})
+                    .get("details", [])
+                )
+                sub_assessment_link = next(
+                    (
+                        v
+                        for detail in details
+                        for k, v in detail.items()
+                        if k == "subAssessmentsLink"
+                    ),
+                    None,
                 )
 
-        # Azure API response doesn't match documentation
-        # https://learn.microsoft.com/en-us/rest/api/defenderforcloud/security-contacts/list?tabs=HTTP
-        if False:
-            return_value.update({"contacts": {}})
-            for subscription_id in self.subscription_ids(subscriptions):
-                contacts = self.get_contacts(subscription_id)
+                if not sub_assessment_link:
+                    continue
 
-                self.write_events(event_writer, contacts, self.contacts_metadata())
-                return_value["contacts"].update({subscription_id: contacts})
-
-        if True:
-            return_value.update({"secure_score": {}})
-            for subscription_id in self.subscription_ids(subscriptions):
-                secure_score = self.get_secure_score(subscription_id)
-
-                self.write_events(
-                    event_writer, secure_score, self.secure_score_metadata()
+                task_sub_assessments = self.get_sub_assessment(
+                    subscription_id, assessment["name"]
                 )
-                return_value["secure_score"].update({subscription_id: secure_score})
+
+                if not task_sub_assessments:
+                    continue
+
+                task_sub_assessments = [
+                    i.update({"AK_SOURCE": f"task_id:{task['id']}"})
+                    for i in task_sub_assessments
+                ]
+
+                task.update({"task_sub_assessment": task_sub_assessments})
 
         return return_value
+
+    def process_smashed_events(self, events):
+        new = []
+        for sub_id, tasks in events["tasks"].items():
+
+            for task in tasks:
+
+                out = {}
+                new.append(out)
+                out["task"] = task
+
+                if "assessmentKey" not in task["properties"]["securityTaskParameters"]:
+                    continue
+
+                out["assessments"] = []
+                for assessment in events["assessments"][sub_id]:
+                    if (
+                        task["properties"]["securityTaskParameters"]["assessmentKey"]
+                        in assessment["id"]
+                    ):
+                        out["assessments"].append(assessment)
+                    else:
+                        continue
+
+                    for metadata in events["assessment_metadata"][sub_id]:
+                        if metadata["name"] in assessment["id"]:
+                            assessment.update({"metadata": metadata})
+
+                details = (
+                    task.get("properties", {})
+                    .get("securityTaskParameters", {})
+                    .get("details", [])
+                )
+
+                sub_assessment_link = next(
+                    (
+                        v
+                        for detail in details
+                        for k, v in detail.items()
+                        if k == "subAssessmentsLink"
+                    ),
+                    None,
+                )
+
+                if not sub_assessment_link:
+                    continue
+
+                for subassessment in events["sub_assessments"][sub_id]:
+                    if ["value"].lower() in subassessment["id"].lower():
+                        out["task_subassessments"].append(subassessment)
+
+        return new
+
+    def collect_events(self, event_writer):
+        events = self.smash_events()
+        events = self.process_smashed_events(events)
+        metadata = {
+            "sourcetype": "azure:security:finding",
+            "index": self.get_output_index(),
+            "source": f"{self.input_type}",
+            "SSPHP_RUN": datetime.now().timestamp(),
+        }
+
+        self.write_events(event_writer, events, metadata)
+        return events
+
+    # def collect_events_old(self, event_writer):
+    #     """Poll for all subscriptions then iterrate through each and get alerts and tasks"""
+    #     subscriptions = self.get_subscriptions()
+
+    #     return_value = {}
+
+    #     if False:  # self.get_arg("collect_subscriptions"):
+    #         self.write_events(event_writer, subscriptions, self.subscription_metadata())
+
+    #     if self.get_arg("collect_security_center_alerts"):
+    #         return_value.update({"alerts": {}})
+    #         for subscription_id in self.subscription_ids(subscriptions):
+    #             alerts = self.get_alerts(subscription_id)
+
+    #             self.write_events(event_writer, alerts, self.alert_metadata())
+
+    #             return_value["alerts"].update({subscription_id: alerts})
+
+    #     if self.get_arg("collect_security_center_tasks"):
+    #         return_value.update({"tasks": {}})
+    #         for subscription_id in self.subscription_ids(subscriptions):
+    #             tasks = self.get_tasks(subscription_id)
+
+    #             self.write_events(event_writer, tasks, self.task_metadata())
+
+    #             return_value["tasks"].update({subscription_id: tasks})
+
+    #             for task in tasks:
+    #                 if "properties" not in assessment:
+    #                     continue
+    #                 if "additionalData" not in assessment["properties"]:
+    #                     continue
+    #                 if (
+    #                     "subAssessmentsLink"
+    #                     not in assessment["properties"]["additionalData"]
+    #                 ):
+    #                     continue
+
+    #                 sub_assessment = self.get_sub_assessment(
+    #                     subscription_id, assessment["name"]
+    #                 )
+
+    #                 self.write_events(
+    #                     event_writer,
+    #                     sub_assessment,
+    #                     self.sub_assessment_metadata(
+    #                         subscription_id, assessment["name"]
+    #                     ),
+    #                 )
+
+    #     if self.get_arg("collect_security_assessments"):
+    #         return_value.update({"assessments": {}})
+    #         return_value.update({"sub_assessments": {}})
+    #         return_value.update({"assessment_metadata": {}})
+
+    #         for subscription_id in self.subscription_ids(subscriptions):
+    #             assessments = self.get_assessments(subscription_id)
+    #             self.write_events(
+    #                 event_writer,
+    #                 assessments,
+    #                 self.assessments_metadata(subscription_id),
+    #             )
+
+    #             return_value["assessments"].update({subscription_id: assessments})
+
+    #             for assessment in assessments:
+    #                 if "properties" not in assessment:
+    #                     continue
+    #                 if "additionalData" not in assessment["properties"]:
+    #                     continue
+    #                 if (
+    #                     "subAssessmentsLink"
+    #                     not in assessment["properties"]["additionalData"]
+    #                 ):
+    #                     continue
+
+    #                 sub_assessment = self.get_sub_assessment(
+    #                     subscription_id, assessment["name"]
+    #                 )
+
+    #                 self.write_events(
+    #                     event_writer,
+    #                     sub_assessment,
+    #                     self.sub_assessment_metadata(
+    #                         subscription_id, assessment["name"]
+    #                     ),
+    #                 )
+
+    #             sub_assessments = self.get_sub_assessments(subscription_id)
+    #             self.write_events(
+    #                 event_writer,
+    #                 sub_assessments,
+    #                 self.sub_assessments_metadata(subscription_id),
+    #             )
+    #             return_value["sub_assessments"].update(
+    #                 {subscription_id: sub_assessments}
+    #             )
+
+    #             assessment_metadata = self.get_assessment_metadata(subscription_id)
+    #             self.write_events(
+    #                 event_writer,
+    #                 assessment_metadata,
+    #                 self.assessment_metadata_metadata(subscription_id),
+    #             )
+    #             return_value["assessment_metadata"].update(
+    #                 {subscription_id: assessment_metadata}
+    #             )
+
+    #     # Azure API response doesn't match documentation
+    #     # https://learn.microsoft.com/en-us/rest/api/defenderforcloud/security-contacts/list?tabs=HTTP
+    #     if False:
+    #         return_value.update({"contacts": {}})
+    #         for subscription_id in self.subscription_ids(subscriptions):
+    #             contacts = self.get_contacts(subscription_id)
+
+    #             self.write_events(event_writer, contacts, self.contacts_metadata())
+    #             return_value["contacts"].update({subscription_id: contacts})
+
+    #     if True:
+    #         return_value.update({"secure_score": {}})
+    #         for subscription_id in self.subscription_ids(subscriptions):
+    #             secure_score = self.get_secure_score(subscription_id)
+
+    #             self.write_events(
+    #                 event_writer, secure_score, self.secure_score_metadata()
+    #             )
+    #             return_value["secure_score"].update({subscription_id: secure_score})
+
+    #     return return_value
 
     def get_account_fields(self):
         account_fields = []

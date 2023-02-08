@@ -1,0 +1,28 @@
+name: Python package
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python 3.x
+        uses: actions/setup-python@v4
+        with:
+          # Semantic version range syntax or exact version of a Python version
+          python-version: '3.9.x'
+	  
+          # Optional - x64 or x86 architecture, defaults to x64
+          architecture: 'x64'
+	  cache: 'pip'
+      - run: pip install -r tests/requirements.txt splunk-add-on-ucc-framework splunk-packaging-toolkit
+	  
+
+      - name: Run tests
+        run: cd tests; pytest
+
+      - name: Package
+        run: ucc-gen build && slim package output/TA-MS-AAD && ls -la *.gz && sha1sum *.gz
