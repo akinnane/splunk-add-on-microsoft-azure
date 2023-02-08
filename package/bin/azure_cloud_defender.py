@@ -341,15 +341,14 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
 
     def sub_assessment_url(self, subscription_id, assessment_id, check_point=None):
         url = f"{self.management_base_url()}/subscriptions/{subscription_id}/providers/Microsoft.Security/assessments/{assessment_id}/subAssessments?api-version=2019-01-01-preview"
-        # if check_point:
-        #     url += f"&$filter=Properties/LastStateChangeTimeUtc gt {check_point}"
         return url
 
     def get_sub_assessment(self, subscription_id, assessment_id):
         """Get security center tasks"""
         # check_point_key = f"asc_tasks_last_date_{self.get_input_stanza_names()}"
         # check_point = self.get_check_point(check_point_key)
-        url = self.sub_assessments_url(subscription_id, None)
+        url = self.sub_assessments_url(subscription_id, assessment_id)
+        self.log_debug(f"get_sub_assessment() url={url} {assessment_id}")
         # event_date_key = "lastStateChangeTimeUtc"
         sub_assessment = self.get_items(url)
         self.log_debug(f"get_sub_assessment() url={url} tasks={len(sub_assessment)}")
