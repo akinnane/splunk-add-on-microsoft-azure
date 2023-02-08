@@ -173,5 +173,5 @@ def test_get_assessment_metadata(acd, sub_ids):
 @pytest.mark.live
 def test_process_events(acd, ew):
     events = acd.collect_events(ew)
-    pprint(events)
+    # pprint(events)
     assert False

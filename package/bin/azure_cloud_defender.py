@@ -343,13 +343,10 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         url = f"{self.management_base_url()}/subscriptions/{subscription_id}/providers/Microsoft.Security/assessments/{assessment_id}/subAssessments?api-version=2019-01-01-preview"
         return url
 
-    def get_sub_assessment(self, subscription_id, assessment_id):
+    def get_sub_assessment(self, url):
         """Get security center tasks"""
-        # check_point_key = f"asc_tasks_last_date_{self.get_input_stanza_names()}"
-        # check_point = self.get_check_point(check_point_key)
-        url = self.sub_assessments_url(subscription_id, assessment_id)
-        self.log_debug(f"get_sub_assessment() url={url} {assessment_id}")
-        # event_date_key = "lastStateChangeTimeUtc"
+        url = f"{self.management_base_url()}{url}"
+        self.log_debug(f"AK get_sub_assessment() url={url}")
         sub_assessment = self.get_items(url)
         self.log_debug(f"get_sub_assessment() url={url} tasks={len(sub_assessment)}")
         return sub_assessment
@@ -549,7 +546,7 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
             #     if not assessment_sub_assessments_link:
             #         continue
 
-                
+
             #     assessment_sub_assessments = self.get_sub_assessment(
             #         subscription_id, assessment["name"]
             #     )
@@ -566,8 +563,8 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
             #         {"assessment_sub_assessments": assessment_sub_assessments}
             #     )
 
-            # tasks = self.get_tasks(subscription_id)
-            # return_value["tasks"].update({subscription_id: tasks})
+            tasks = self.get_tasks(subscription_id)
+            return_value["tasks"].update({subscription_id: tasks})
 
             for task in tasks:
                 details = (
@@ -588,9 +585,7 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                 if not sub_assessment_link:
                     continue
 
-                task_sub_assessments = self.get_sub_assessment(
-                    subscription_id, assessment["name"]
-                )
+                task_sub_assessments = self.get_sub_assessment(sub_assessment_link)
 
                 if not task_sub_assessments:
                     continue
@@ -665,7 +660,7 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
             "source": f"{self.input_type}",
             "SSPHP_RUN": datetime.now().timestamp(),
         }
-
+        self.logger.debug(f"events for writing: {len(events)} \nmetadata: {metadata} \nexample event: {events[0]}")
         self.write_events(event_writer, events, metadata)
         return events
 
