@@ -258,12 +258,12 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
             "source": f"{self.input_type}",
         }
 
-    def get_tasks(self, subscription_id):
+    def get_tasks(self, subscription_id, use_check_point=True):
         """Get security center tasks"""
         check_point_key = (
             f"asc_tasks_last_date_{self.get_input_stanza_names()}_{subscription_id}"
         )
-        check_point = self.get_check_point(check_point_key)
+        check_point = self.get_check_point(check_point_key if use_check_point else None)
         url = self.task_url(subscription_id, check_point)
         event_date_key = "lastStateChangeTimeUtc"
         tasks = self.get_items_checkpoint(url, check_point_key, event_date_key)
@@ -355,10 +355,10 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         return sub_assessment
 
     def assessment_metadata_url(self, subscription_id, check_point=None):
-        url = f"{self.management_base_url()}/subscriptions/{subscription_id}/providers/Microsoft.Security/assessmentMetadata?api-version=2020-01-01"
-        # if check_point:
-        #     url += f"&$filter=Properties/LastStateChangeTimeUtc gt {check_point}"
-        return url
+        # url = f"{self.management_base_url()}/subscriptions/{subscription_id}/providers/Microsoft.Security/assessmentMetadata?api-version=2020-01-01"
+        # # if check_point:
+        # #     url += f"&$filter=Properties/LastStateChangeTimeUtc gt {check_point}"
+        # return url
 
     def assessment_metadata_metadata(self, subscription_id):
         """Metadata for Defender Task Splunk ingestion"""
@@ -539,34 +539,35 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                 {subscription_id: assessment_metadata}
             )
 
-            for assessment in assessments:
-                assessment_sub_assessments_link = (
-                    assessment.get("properties", {})
-                    .get("additionalData", {})
-                    .get("subAssessmentsLink", "")
-                )
+            # for assessment in assessments:
+            #     assessment_sub_assessments_link = (
+            #         assessment.get("properties", {})
+            #         .get("additionalData", {})
+            #         .get("subAssessmentsLink", "")
+            #     )
 
-                if not assessment_sub_assessments_link:
-                    continue
+            #     if not assessment_sub_assessments_link:
+            #         continue
 
-                assessment_sub_assessments = self.get_sub_assessment(
-                    subscription_id, assessment["name"]
-                )
+                
+            #     assessment_sub_assessments = self.get_sub_assessment(
+            #         subscription_id, assessment["name"]
+            #     )
 
-                if not assessment_sub_assessments:
-                    continue
+            #     if not assessment_sub_assessments:
+            #         continue
 
-                assessment_sub_assessments = [
-                    i.update({"AK_SOURCE": f"assessment_id:{assessment['id']}"})
-                    for i in assessment_sub_assessments
-                ]
+            #     assessment_sub_assessments = [
+            #         i.update({"AK_SOURCE": f"assessment_id:{assessment['id']}"})
+            #         for i in assessment_sub_assessments
+            #     ]
 
-                assessment.update(
-                    {"assessment_sub_assessments": assessment_sub_assessments}
-                )
+            #     assessment.update(
+            #         {"assessment_sub_assessments": assessment_sub_assessments}
+            #     )
 
-            tasks = self.get_tasks(subscription_id)
-            return_value["tasks"].update({subscription_id: tasks})
+            # tasks = self.get_tasks(subscription_id)
+            # return_value["tasks"].update({subscription_id: tasks})
 
             for task in tasks:
                 details = (
@@ -630,28 +631,28 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                         if metadata["name"] in assessment["id"]:
                             assessment.update({"metadata": metadata})
 
-                details = (
-                    task.get("properties", {})
-                    .get("securityTaskParameters", {})
-                    .get("details", [])
-                )
+                # details = (
+                #     task.get("properties", {})
+                #     .get("securityTaskParameters", {})
+                #     .get("details", [])
+                # )
 
-                sub_assessment_link = next(
-                    (
-                        v
-                        for detail in details
-                        for k, v in detail.items()
-                        if k == "subAssessmentsLink"
-                    ),
-                    None,
-                )
+                # sub_assessment_link = next(
+                #     (
+                #         v
+                #         for detail in details
+                #         for k, v in detail.items()
+                #         if k == "subAssessmentsLink"
+                #     ),
+                #     None,
+                # )
 
-                if not sub_assessment_link:
-                    continue
+                # if not sub_assessment_link:
+                #     continue
 
-                for subassessment in events["sub_assessments"][sub_id]:
-                    if ["value"].lower() in subassessment["id"].lower():
-                        out["task_subassessments"].append(subassessment)
+                # # for subassessment in events["sub_assessments"][sub_id]:
+                # #     if ["value"].lower() in subassessment["id"].lower():
+                # #         out["task_subassessments"].append(subassessment)
 
         return new
 
