@@ -355,10 +355,10 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         return sub_assessment
 
     def assessment_metadata_url(self, subscription_id, check_point=None):
-        # url = f"{self.management_base_url()}/subscriptions/{subscription_id}/providers/Microsoft.Security/assessmentMetadata?api-version=2020-01-01"
-        # # if check_point:
-        # #     url += f"&$filter=Properties/LastStateChangeTimeUtc gt {check_point}"
-        # return url
+        url = f"{self.management_base_url()}/subscriptions/{subscription_id}/providers/Microsoft.Security/assessmentMetadata?api-version=2020-01-01"
+        # if check_point:
+        #     url += f"&$filter=Properties/LastStateChangeTimeUtc gt {check_point}"
+        return url
 
     def assessment_metadata_metadata(self, subscription_id):
         """Metadata for Defender Task Splunk ingestion"""
