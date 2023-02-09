@@ -536,32 +536,32 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                 {subscription_id: assessment_metadata}
             )
 
-            # for assessment in assessments:
-            #     assessment_sub_assessments_link = (
-            #         assessment.get("properties", {})
-            #         .get("additionalData", {})
-            #         .get("subAssessmentsLink", "")
-            #     )
+            for assessment in assessments:
+                assessment_sub_assessments_link = (
+                    assessment.get("properties", {})
+                    .get("additionalData", {})
+                    .get("subAssessmentsLink", "")
+                )
 
-            #     if not assessment_sub_assessments_link:
-            #         continue
+                if not assessment_sub_assessments_link:
+                    continue
+                assessment.get("meta").update({"sub_assessments_link": assessment_sub_assessments_link})
 
 
-            #     assessment_sub_assessments = self.get_sub_assessment(
-            #         subscription_id, assessment["name"]
-            #     )
+                assessment_sub_assessments = self.get_sub_assessment(assessment_sub_assessments_link)
 
-            #     if not assessment_sub_assessments:
-            #         continue
+                assessment.get("meta").update({"sub_assessments": len(assessment_sub_assessments)})
+                if not assessment_sub_assessments:
+                    continue
 
             #     assessment_sub_assessments = [
             #         i.update({"AK_SOURCE": f"assessment_id:{assessment['id']}"})
             #         for i in assessment_sub_assessments
             #     ]
 
-            #     assessment.update(
-            #         {"assessment_sub_assessments": assessment_sub_assessments}
-            #     )
+                assessment.update(
+                    {"sub_assessments": assessment_sub_assessments}
+                )
 
             tasks = self.get_tasks(subscription_id)
             return_value["tasks"].update({subscription_id: tasks})
@@ -585,13 +585,13 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                 )
 
                 if not sub_assessment_link:
-                    task.get("meta").update({"no_sub_assessment_link_detected": True})
+                    task.get("meta").update({"no_sub_assessments_link_detected": True})
                     continue
 
-                task.get("meta").update({"sub_assessment_link": sub_assessment_link})
+                task.get("meta").update({"sub_assessments_link": sub_assessment_link})
                 task_sub_assessments = self.get_sub_assessment(sub_assessment_link)
 
-                task.get("meta").update({"task_sub_assessments": len(task_sub_assessments)})
+                task.get("meta").update({"sub_assessments": len(task_sub_assessments)})
                 if not task_sub_assessments:
                     continue
 
@@ -600,7 +600,7 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                 #     for i in task_sub_assessments
                 # ]
 
-                task.update({"task_sub_assessment": task_sub_assessments})
+                task.update({"sub_assessments": task_sub_assessments})
 
         return return_value
 
