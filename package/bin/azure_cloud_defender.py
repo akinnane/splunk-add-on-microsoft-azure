@@ -577,27 +577,26 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
 
                 sub_assessment_link = next(
                     (
-                        v
+                        detail['value']
                         for detail in details
-                        for k, v in detail.items()
-                        if k == "subAssessmentsLink"
+                        if detail['name'] == "subAssessmentsLink"
                     ),
                     None,
                 )
 
                 if not sub_assessment_link:
-                    task.update({"meta": {"no_sub_assessment_link_detected": True}})
+                    return_value.update({"meta": {"no_sub_assessment_link_detected": True}})
                     continue
 
-                task.update({"meta": {"sub_assessment_link":sub_assessment_link}})
+                return_value.update({"meta": {"sub_assessment_link":sub_assessment_link}})
                 task_sub_assessments = self.get_sub_assessment(sub_assessment_link)
 
-                task.update({"meta": {"task_sub_assessments": len(task_sub_assessments)}})
+                return_value.update({"meta": {"task_sub_assessments": len(task_sub_assessments)}})
                 if not task_sub_assessments:
                     continue
 
                 task_sub_assessments = [
-                    i.update({"AK_SOURCE": f"task_id:{task['id']}"})
+                    i.update({"AK_TASK_SOURCE": f"task_id:{task['id']}"})
                     for i in task_sub_assessments
                 ]
 
