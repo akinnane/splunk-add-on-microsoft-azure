@@ -572,6 +572,9 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                     .get("securityTaskParameters", {})
                     .get("details", [])
                 )
+
+                task.update({"meta": {"details": len(details)}})
+
                 sub_assessment_link = next(
                     (
                         v
@@ -583,10 +586,13 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                 )
 
                 if not sub_assessment_link:
+                    task.update({"meta": {"no_sub_assessment_link_detected": True}})
                     continue
 
+                task.update({"meta": {"sub_assessment_link":sub_assessment_link}})
                 task_sub_assessments = self.get_sub_assessment(sub_assessment_link)
 
+                task.update({"meta": {"task_sub_assessments": len(task_sub_assessments)}})
                 if not task_sub_assessments:
                     continue
 
@@ -623,7 +629,7 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                         == assessment.get("properties", {}).get("resourceDetails", {}).get("Id", "")
                     ) or (
                         # Task ID in "Assesment Resource ID/"
-                        # Catch subresources but exclude resources on the same hierarchical level with simular name 
+                        # Catch subresources but exclude resources on the same hierarchical level with simular name
                         task.get("properties", {}).get("securityTaskParameters", {}).get("resourceId", "") + "/"
                         in assessment.get("properties", {}).get("resourceDetails", {}).get("Id", "")
                     )):
@@ -668,8 +674,9 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
             "index": self.get_output_index(),
             "source": f"{self.input_type}",
         }
+        t = datetime.now().timestamp()
         for e in events:
-            e['SSPHP_RUN'] = datetime.now().timestamp()
+            e['SSPHP_RUN'] = t
 
         self.logger.debug(f"events for writing: {len(events)} \nmetadata: {metadata} \nexample event: {events[0]}")
 
