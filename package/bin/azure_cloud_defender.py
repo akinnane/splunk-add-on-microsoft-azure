@@ -585,20 +585,20 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                 )
 
                 if not sub_assessment_link:
-                    return_value.update({"meta": {"no_sub_assessment_link_detected": True}})
+                    task.get("meta").update({"no_sub_assessment_link_detected": True})
                     continue
 
-                return_value.update({"meta": {"sub_assessment_link":sub_assessment_link}})
+                task.get("meta").update({"sub_assessment_link": sub_assessment_link})
                 task_sub_assessments = self.get_sub_assessment(sub_assessment_link)
 
-                return_value.update({"meta": {"task_sub_assessments": len(task_sub_assessments)}})
+                task.get("meta").update({"task_sub_assessments": len(task_sub_assessments)})
                 if not task_sub_assessments:
                     continue
 
-                task_sub_assessments = [
-                    i.update({"AK_TASK_SOURCE": f"task_id:{task['id']}"})
-                    for i in task_sub_assessments
-                ]
+                # task_sub_assessments = [
+                #     i.update({"AK_TASK_SOURCE": f"task_id:{task['id']}"})
+                #     for i in task_sub_assessments
+                # ]
 
                 task.update({"task_sub_assessment": task_sub_assessments})
 
