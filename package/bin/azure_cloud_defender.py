@@ -545,7 +545,8 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
 
                 if not assessment_sub_assessments_link:
                     continue
-                assessment.get("meta").update({"sub_assessments_link": assessment_sub_assessments_link})
+
+                assessment.update({"meta":{"sub_assessments_link": assessment_sub_assessments_link}})
 
 
                 assessment_sub_assessments = self.get_sub_assessment(assessment_sub_assessments_link)
