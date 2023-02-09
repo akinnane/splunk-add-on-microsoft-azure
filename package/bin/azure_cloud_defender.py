@@ -617,10 +617,16 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                     if (
                         task["properties"]["securityTaskParameters"]["assessmentKey"]
                         in assessment["id"]
-                    ) and (
+                    ) and ((
+                        # Task ID == Assesment Resource ID
                         task.get("properties", {}).get("securityTaskParameters", {}).get("resourceId", "")
+                        == assessment.get("properties", {}).get("resourceDetails", {}).get("Id", "")
+                    ) or (
+                        # Task ID in "Assesment Resource ID/"
+                        # Catch subresources but exclude resources on the same hierarchical level with simular name 
+                        task.get("properties", {}).get("securityTaskParameters", {}).get("resourceId", "") + "/"
                         in assessment.get("properties", {}).get("resourceDetails", {}).get("Id", "")
-                    ):
+                    )):
                         out["assessments"].append(assessment)
                     else:
                         continue
@@ -661,9 +667,12 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
             "sourcetype": "azure:security:finding",
             "index": self.get_output_index(),
             "source": f"{self.input_type}",
-            "SSPHP_RUN": datetime.now().timestamp(),
         }
+        for e in events:
+            e['SSPHP_RUN'] = datetime.now().timestamp()
+
         self.logger.debug(f"events for writing: {len(events)} \nmetadata: {metadata} \nexample event: {events[0]}")
+
         self.write_events(event_writer, events, metadata)
         return events
 
