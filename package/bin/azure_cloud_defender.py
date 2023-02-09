@@ -345,7 +345,7 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
 
     def get_sub_assessment(self, url):
         """Get security center tasks"""
-        url = f"{self.management_base_url()}{url}"
+        url = f"{self.management_base_url()}{url}?api-version=2019-01-01-preview"
         self.log_debug(f"AK get_sub_assessment() url={url}")
         sub_assessment = self.get_items(url)
         self.log_debug(f"get_sub_assessment() url={url} tasks={len(sub_assessment)}")
