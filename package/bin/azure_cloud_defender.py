@@ -617,6 +617,9 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                     if (
                         task["properties"]["securityTaskParameters"]["assessmentKey"]
                         in assessment["id"]
+                    ) and (
+                        task.get("properties", {}).get("securityTaskParameters", {}).get("resourceId", "")
+                        in assessment.get("properties", {}).get("resourceDetails", {}).get("Id", "")
                     ):
                         out["assessments"].append(assessment)
                     else:
