@@ -19,15 +19,16 @@ limitations under the License.
 import json
 import os
 import sys
+from datetime import datetime, timedelta
 
 import import_declare_test
+import requests
 import ta_azure_utils.auth as azauth
 import ta_azure_utils.utils as azutils
 from splunklib import modularinput as smi
 from splunktaucclib.modinput_wrapper import base_modinput as base_mi
-from datetime import datetime
-from datetime import timedelta
-import requests
+
+import concurrent.futures
 
 bin_dir = os.path.basename(__file__)
 
@@ -580,7 +581,7 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
 
                 assessment.update({"sub_assessments": assessment_sub_assessments})
 
-            tasks = self.get_tasks(subscription_id)
+            tasks = self.get_tasks(subscription_id, use_check_point=False)
             return_value["tasks"].update({subscription_id: tasks})
 
             for task in tasks:
@@ -618,6 +619,114 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                 # ]
 
                 task.update({"sub_assessments": task_sub_assessments})
+
+        return return_value
+
+    def smash_events_subscription(self, subscription_id):
+        return_value = {}
+        return_value.update({"tasks": {}})
+        return_value.update({"assessments": {}})
+        return_value.update({"assessment_metadata": {}})
+
+        assessments = self.get_assessments(subscription_id)
+        return_value["assessments"].update({subscription_id: assessments})
+
+        assessment_metadata = self.get_assessment_metadata(subscription_id)
+        return_value["assessment_metadata"].update(
+            {subscription_id: assessment_metadata}
+        )
+
+        for assessment in assessments:
+            assessment_sub_assessments_link = (
+                assessment.get("properties", {})
+                .get("additionalData", {})
+                .get("subAssessmentsLink", "")
+            )
+
+            if not assessment_sub_assessments_link:
+                continue
+
+            assessment.update(
+                {"meta": {"sub_assessments_link": assessment_sub_assessments_link}}
+            )
+
+            assessment_sub_assessments = self.get_sub_assessment(
+                assessment_sub_assessments_link
+            )
+
+            assessment.get("meta").update(
+                {"sub_assessments": len(assessment_sub_assessments)}
+            )
+            if not assessment_sub_assessments:
+                continue
+
+            #     assessment_sub_assessments = [
+            #         i.update({"AK_SOURCE": f"assessment_id:{assessment['id']}"})
+            #         for i in assessment_sub_assessments
+            #     ]
+
+            assessment.update({"sub_assessments": assessment_sub_assessments})
+
+        tasks = self.get_tasks(subscription_id, use_check_point=False)
+        return_value["tasks"].update({subscription_id: tasks})
+
+        for task in tasks:
+            details = (
+                task.get("properties", {})
+                .get("securityTaskParameters", {})
+                .get("details", [])
+            )
+
+            task.update({"meta": {"details": len(details)}})
+
+            sub_assessment_link = next(
+                (
+                    detail["value"]
+                    for detail in details
+                    if detail["name"] == "subAssessmentsLink"
+                ),
+                None,
+            )
+
+            if not sub_assessment_link:
+                task.get("meta").update({"no_sub_assessments_link_detected": True})
+                continue
+
+            task.get("meta").update({"sub_assessments_link": sub_assessment_link})
+            task_sub_assessments = self.get_sub_assessment(sub_assessment_link)
+
+            task.get("meta").update({"sub_assessments": len(task_sub_assessments)})
+            if not task_sub_assessments:
+                continue
+
+            # task_sub_assessments = [
+            #     i.update({"AK_TASK_SOURCE": f"task_id:{task['id']}"})
+            #     for i in task_sub_assessments
+            # ]
+
+            task.update({"sub_assessments": task_sub_assessments})
+
+        return return_value
+
+    def smash_events_threaded(self):
+        subscriptions = self.get_subscriptions()
+        results = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+            for subscription_id in self.subscription_ids(subscriptions):
+                results.append(
+                    executor.submit(self.smash_events_subscription, subscription_id)
+                )
+
+        return_value = {}
+        return_value.update({"tasks": {}})
+        return_value.update({"assessments": {}})
+        return_value.update({"assessment_metadata": {}})
+
+        for r in results:
+            r = r.result()
+            return_value["tasks"].update(r["tasks"])
+            return_value["assessments"].update(r["assessments"])
+            return_value["assessment_metadata"].update(r["assessment_metadata"])
 
         return return_value
 
@@ -695,7 +804,7 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         return new
 
     def collect_events(self, event_writer):
-        events = self.smash_events()
+        events = self.smash_events_threaded()
         events = self.process_smashed_events(events)
         metadata = {
             "sourcetype": "azure:security:finding",
