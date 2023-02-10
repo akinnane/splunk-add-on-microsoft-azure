@@ -175,3 +175,10 @@ def test_process_events(acd, ew):
     events = acd.collect_events(ew)
     # pprint(events)
     assert False
+
+
+@pytest.mark.live
+def test_get_sub_assessment_fail(acd):
+    events = acd.get_sub_assessment("/fofofofoffofofofofo")
+    # pprint(events)
+    assert 1 == len(events)

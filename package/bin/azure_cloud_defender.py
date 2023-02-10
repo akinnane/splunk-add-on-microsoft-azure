@@ -27,6 +27,7 @@ from splunklib import modularinput as smi
 from splunktaucclib.modinput_wrapper import base_modinput as base_mi
 from datetime import datetime
 from datetime import timedelta
+import requests
 
 bin_dir = os.path.basename(__file__)
 
@@ -347,7 +348,19 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         """Get security center tasks"""
         url = f"{self.management_base_url()}{url}?api-version=2019-01-01-preview"
         self.log_debug(f"AK get_sub_assessment() url={url}")
-        sub_assessment = self.get_items(url)
+        try:
+            sub_assessment = self.get_items(url)
+        except requests.exceptions.HTTPError as e:
+            self.log_error(
+                f"get_sub_assessment() ERROR getting subassessments from url={url} exception:{e}"
+            )
+            sub_assessment = [
+                {
+                    "AK_ERROR": "ERROR getting sub assesments",
+                    "url": str(url),
+                    "error": str(e),
+                }
+            ]
         self.log_debug(f"get_sub_assessment() url={url} tasks={len(sub_assessment)}")
         return sub_assessment
 
@@ -546,23 +559,26 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                 if not assessment_sub_assessments_link:
                     continue
 
-                assessment.update({"meta":{"sub_assessments_link": assessment_sub_assessments_link}})
+                assessment.update(
+                    {"meta": {"sub_assessments_link": assessment_sub_assessments_link}}
+                )
 
+                assessment_sub_assessments = self.get_sub_assessment(
+                    assessment_sub_assessments_link
+                )
 
-                assessment_sub_assessments = self.get_sub_assessment(assessment_sub_assessments_link)
-
-                assessment.get("meta").update({"sub_assessments": len(assessment_sub_assessments)})
+                assessment.get("meta").update(
+                    {"sub_assessments": len(assessment_sub_assessments)}
+                )
                 if not assessment_sub_assessments:
                     continue
 
-            #     assessment_sub_assessments = [
-            #         i.update({"AK_SOURCE": f"assessment_id:{assessment['id']}"})
-            #         for i in assessment_sub_assessments
-            #     ]
+                #     assessment_sub_assessments = [
+                #         i.update({"AK_SOURCE": f"assessment_id:{assessment['id']}"})
+                #         for i in assessment_sub_assessments
+                #     ]
 
-                assessment.update(
-                    {"sub_assessments": assessment_sub_assessments}
-                )
+                assessment.update({"sub_assessments": assessment_sub_assessments})
 
             tasks = self.get_tasks(subscription_id)
             return_value["tasks"].update({subscription_id: tasks})
@@ -578,9 +594,9 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
 
                 sub_assessment_link = next(
                     (
-                        detail['value']
+                        detail["value"]
                         for detail in details
-                        if detail['name'] == "subAssessmentsLink"
+                        if detail["name"] == "subAssessmentsLink"
                     ),
                     None,
                 )
@@ -623,16 +639,28 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                     if (
                         task["properties"]["securityTaskParameters"]["assessmentKey"]
                         in assessment["id"]
-                    ) and ((
-                        # Task ID == Assesment Resource ID
-                        task.get("properties", {}).get("securityTaskParameters", {}).get("resourceId", "")
-                        == assessment.get("properties", {}).get("resourceDetails", {}).get("Id", "")
-                    ) or (
-                        # Task ID in "Assesment Resource ID/"
-                        # Catch subresources but exclude resources on the same hierarchical level with simular name
-                        task.get("properties", {}).get("securityTaskParameters", {}).get("resourceId", "") + "/"
-                        in assessment.get("properties", {}).get("resourceDetails", {}).get("Id", "")
-                    )):
+                    ) and (
+                        (
+                            # Task ID == Assesment Resource ID
+                            task.get("properties", {})
+                            .get("securityTaskParameters", {})
+                            .get("resourceId", "")
+                            == assessment.get("properties", {})
+                            .get("resourceDetails", {})
+                            .get("Id", "")
+                        )
+                        or (
+                            # Task ID in "Assesment Resource ID/"
+                            # Catch subresources but exclude resources on the same hierarchical level with simular name
+                            task.get("properties", {})
+                            .get("securityTaskParameters", {})
+                            .get("resourceId", "")
+                            + "/"
+                            in assessment.get("properties", {})
+                            .get("resourceDetails", {})
+                            .get("Id", "")
+                        )
+                    ):
                         out["assessments"].append(assessment)
                     else:
                         continue
@@ -676,9 +704,11 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         }
         t = datetime.now().timestamp()
         for e in events:
-            e['SSPHP_RUN'] = t
+            e["SSPHP_RUN"] = t
 
-        self.logger.debug(f"events for writing: {len(events)} \nmetadata: {metadata} \nexample event: {events[0]}")
+        self.logger.debug(
+            f"events for writing: {len(events)} \nmetadata: {metadata} \nexample event: {events[0]}"
+        )
 
         self.write_events(event_writer, events, metadata)
         return events
