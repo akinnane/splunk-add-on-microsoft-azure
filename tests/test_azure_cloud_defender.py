@@ -99,9 +99,6 @@ def test_get_assessments(acd, sub_ids):
         assert assessments
 
 
-# Contacts
-
-
 @pytest.mark.skip(reason="Azure API response doesn't match documentation")
 def test_get_contacts(acd, sub_ids):
     for sub_id in sub_ids:

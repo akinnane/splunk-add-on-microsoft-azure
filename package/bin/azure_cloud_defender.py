@@ -642,12 +642,16 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                 .get("additionalData", {})
                 .get("subAssessmentsLink", "")
             )
+            assessment["meta"] = {}
 
+            assessment["meta"].update(
+                {"sub_assessments_link_detected": bool(assessment_sub_assessments_link)}
+            )
             if not assessment_sub_assessments_link:
                 continue
 
-            assessment.update(
-                {"meta": {"sub_assessments_link": assessment_sub_assessments_link}}
+            assessment["meta"].update(
+                {"assessment_sub_assessments_link": assessment_sub_assessments_link}
             )
 
             assessment_sub_assessments = self.get_sub_assessment(
@@ -657,6 +661,7 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
             assessment.get("meta").update(
                 {"sub_assessments": len(assessment_sub_assessments)}
             )
+
             if not assessment_sub_assessments:
                 continue
 
@@ -688,8 +693,10 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                 None,
             )
 
+            task.get("meta").update(
+                {"task_sub_assessments_link_detected": bool(sub_assessment_link)}
+            )
             if not sub_assessment_link:
-                task.get("meta").update({"no_sub_assessments_link_detected": True})
                 continue
 
             task.get("meta").update({"sub_assessments_link": sub_assessment_link})
@@ -777,29 +784,20 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                     for metadata in events["assessment_metadata"][sub_id]:
                         if metadata["name"] in assessment["id"]:
                             assessment.update({"metadata": metadata})
+                    assessment = None
 
-                # details = (
-                #     task.get("properties", {})
-                #     .get("securityTaskParameters", {})
-                #     .get("details", [])
-                # )
+        for sub_id, assessments in events["tasks"].items():
+            for assessment in assessments:
+                if assessment is None:
+                    continue
 
-                # sub_assessment_link = next(
-                #     (
-                #         v
-                #         for detail in details
-                #         for k, v in detail.items()
-                #         if k == "subAssessmentsLink"
-                #     ),
-                #     None,
-                # )
+                out = {}
+                new.append(out)
+                out["assessment"] = assessment
 
-                # if not sub_assessment_link:
-                #     continue
-
-                # # for subassessment in events["sub_assessments"][sub_id]:
-                # #     if ["value"].lower() in subassessment["id"].lower():
-                # #         out["task_subassessments"].append(subassessment)
+                for metadata in events["assessment_metadata"][sub_id]:
+                    if metadata["name"] in assessment["id"]:
+                        assessment.update({"metadata": metadata})
 
         return new
 
