@@ -16,6 +16,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 """
+import concurrent.futures
 import json
 import os
 import sys
@@ -27,8 +28,7 @@ import ta_azure_utils.auth as azauth
 import ta_azure_utils.utils as azutils
 from splunklib import modularinput as smi
 from splunktaucclib.modinput_wrapper import base_modinput as base_mi
-
-import concurrent.futures
+import time
 
 bin_dir = os.path.basename(__file__)
 
@@ -40,6 +40,7 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         self.global_checkbox_fields = None
         self.session = None
         self.session_start_time = datetime.now()
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=30)
 
     def get_scheme(self):
         """overloaded splunklib modularinput method"""
@@ -436,7 +437,7 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         # check_point = self.get_check_point(check_point_key)
         url = self.contacts_url(subscription_id, None)
         # event_date_key = "lastStateChangeTimeUtc"
-        print(f"get_contacts() url={url}")
+
         contacts = self.get_items(url)
         self.log_debug(f"get_contacts() url={url} tasks={len(contacts)}")
         return contacts
@@ -622,123 +623,133 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
 
         return return_value
 
-    def smash_events_subscription(self, subscription_id):
-        return_value = {}
-        return_value.update({"tasks": {}})
-        return_value.update({"assessments": {}})
-        return_value.update({"assessment_metadata": {}})
+    def smash_assessment_sub_assessment(self, assessment):
+        assessment_sub_assessments_link = (
+            assessment.get("properties", {})
+            .get("additionalData", {})
+            .get("subAssessmentsLink", "")
+        )
+        assessment["meta"] = {}
 
-        assessments = self.get_assessments(subscription_id)
-        return_value["assessments"].update({subscription_id: assessments})
+        assessment["meta"].update(
+            {"sub_assessments_link_detected": bool(assessment_sub_assessments_link)}
+        )
+        if not assessment_sub_assessments_link:
+            return assessment
 
-        assessment_metadata = self.get_assessment_metadata(subscription_id)
-        return_value["assessment_metadata"].update(
-            {subscription_id: assessment_metadata}
+        assessment["meta"].update(
+            {"assessment_sub_assessments_link": assessment_sub_assessments_link}
         )
 
-        for assessment in assessments:
-            assessment_sub_assessments_link = (
-                assessment.get("properties", {})
-                .get("additionalData", {})
-                .get("subAssessmentsLink", "")
-            )
-            assessment["meta"] = {}
+        assessment_sub_assessments = self.get_sub_assessment(
+            assessment_sub_assessments_link
+        )
 
-            assessment["meta"].update(
-                {"sub_assessments_link_detected": bool(assessment_sub_assessments_link)}
-            )
-            if not assessment_sub_assessments_link:
-                continue
+        assessment.get("meta").update(
+            {"sub_assessments": len(assessment_sub_assessments)}
+        )
 
-            assessment["meta"].update(
-                {"assessment_sub_assessments_link": assessment_sub_assessments_link}
-            )
+        if not assessment_sub_assessments:
+            return assessment
 
-            assessment_sub_assessments = self.get_sub_assessment(
-                assessment_sub_assessments_link
-            )
+        assessment.update({"sub_assessments": assessment_sub_assessments})
 
-            assessment.get("meta").update(
-                {"sub_assessments": len(assessment_sub_assessments)}
-            )
+        return assessment
 
-            if not assessment_sub_assessments:
-                continue
+    def smash_task_sub_assessments(self, task):
+        details = (
+            task.get("properties", {})
+            .get("securityTaskParameters", {})
+            .get("details", [])
+        )
 
-            #     assessment_sub_assessments = [
-            #         i.update({"AK_SOURCE": f"assessment_id:{assessment['id']}"})
-            #         for i in assessment_sub_assessments
-            #     ]
+        task.update({"meta": {"details": len(details)}})
 
-            assessment.update({"sub_assessments": assessment_sub_assessments})
+        sub_assessment_link = next(
+            (
+                detail["value"]
+                for detail in details
+                if detail["name"] == "subAssessmentsLink"
+            ),
+            None,
+        )
 
-        tasks = self.get_tasks(subscription_id, use_check_point=False)
-        return_value["tasks"].update({subscription_id: tasks})
+        task.get("meta").update(
+            {"task_sub_assessments_link_detected": bool(sub_assessment_link)}
+        )
+        if not sub_assessment_link:
+            return task
 
-        for task in tasks:
-            details = (
-                task.get("properties", {})
-                .get("securityTaskParameters", {})
-                .get("details", [])
-            )
+        task.get("meta").update({"sub_assessments_link": sub_assessment_link})
+        task_sub_assessments = self.get_sub_assessment(sub_assessment_link)
 
-            task.update({"meta": {"details": len(details)}})
-
-            sub_assessment_link = next(
-                (
-                    detail["value"]
-                    for detail in details
-                    if detail["name"] == "subAssessmentsLink"
-                ),
-                None,
-            )
-
-            task.get("meta").update(
-                {"task_sub_assessments_link_detected": bool(sub_assessment_link)}
-            )
-            if not sub_assessment_link:
-                continue
-
-            task.get("meta").update({"sub_assessments_link": sub_assessment_link})
-            task_sub_assessments = self.get_sub_assessment(sub_assessment_link)
-
-            task.get("meta").update({"sub_assessments": len(task_sub_assessments)})
-            if not task_sub_assessments:
-                continue
+        task.get("meta").update({"sub_assessments": len(task_sub_assessments)})
+        if not task_sub_assessments:
+            return task
 
             # task_sub_assessments = [
             #     i.update({"AK_TASK_SOURCE": f"task_id:{task['id']}"})
             #     for i in task_sub_assessments
             # ]
 
-            task.update({"sub_assessments": task_sub_assessments})
+        task.update({"sub_assessments": task_sub_assessments})
+        return task
+
+    def smash_events_subscription(self, subscription_id):
+        return_value = {}
+        return_value.update({"tasks": []})
+        return_value.update({"assessments": []})
+        return_value.update({"assessment_metadata": []})
+
+        assessments = self.executor.submit(self.get_assessments, subscription_id)
+        tasks = self.executor.submit(
+            self.get_tasks, subscription_id, use_check_point=False
+        )
+        assessment_metadata = self.executor.submit(
+            self.get_assessment_metadata, subscription_id
+        )
+
+        assessments = assessments.result()
+        assessments = list(
+            self.executor.map(self.smash_assessment_sub_assessment, assessments)
+        )
+
+        self.logger.debug(
+            f"smash_events_subscriptions():len(assessments) = {len(assessments)}"
+        )
+        return_value["assessments"] = assessments
+
+        tasks = tasks.result()
+        tasks = list(self.executor.map(self.smash_task_sub_assessments, tasks))
+        return_value["tasks"] = tasks
+
+        return_value["assessment_metadata"] = assessment_metadata.result()
 
         return return_value
 
     def smash_events_threaded(self):
         subscriptions = self.get_subscriptions()
-        results = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-            for subscription_id in self.subscription_ids(subscriptions):
-                results.append(
-                    executor.submit(self.smash_events_subscription, subscription_id)
-                )
-
         return_value = {}
         return_value.update({"tasks": {}})
         return_value.update({"assessments": {}})
         return_value.update({"assessment_metadata": {}})
 
-        for r in results:
-            r = r.result()
-            return_value["tasks"].update(r["tasks"])
-            return_value["assessments"].update(r["assessments"])
-            return_value["assessment_metadata"].update(r["assessment_metadata"])
+        for subscription_id in self.subscription_ids(subscriptions):
+            r = self.smash_events_subscription(subscription_id)
+
+            return_value["tasks"].update({subscription_id: r["tasks"]})
+            return_value["assessments"].update({subscription_id: r["assessments"]})
+            return_value["assessment_metadata"].update(
+                {subscription_id: r["assessment_metadata"]}
+            )
 
         return return_value
 
     def process_smashed_events(self, events):
         new = []
+
+        used_assesments_ids = set()
+
         for sub_id, tasks in events["tasks"].items():
 
             for task in tasks:
@@ -784,26 +795,39 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                     for metadata in events["assessment_metadata"][sub_id]:
                         if metadata["name"] in assessment["id"]:
                             assessment.update({"metadata": metadata})
-                    assessment = None
 
-        for sub_id, assessments in events["tasks"].items():
+                    used_assesments_ids.add(assessment["id"])
+
+        self.logger.debug(f"events['assessments']: {len(events['assessments'])}")
+
+        unused_assessments = {}
+        for sub_id, assessments in events["assessments"].items():
             for assessment in assessments:
-                if assessment is None:
-                    continue
+                if assessment["id"] not in used_assesments_ids:
+                    subscription_assessments = unused_assessments.get(sub_id, [])
+                    subscription_assessments.append(assessment)
+                    unused_assessments[sub_id] = subscription_assessments
 
+        self.logger.debug(
+            f"assessments: {len(assessments)}, used_assessments:{used_assesments_ids}"
+        )
+
+        for sub_id, assessments in unused_assessments.items():
+            for assessment in assessments:
                 out = {}
                 new.append(out)
                 out["assessment"] = assessment
-
                 for metadata in events["assessment_metadata"][sub_id]:
                     if metadata["name"] in assessment["id"]:
                         assessment.update({"metadata": metadata})
-
         return new
 
     def collect_events(self, event_writer):
+        t1 = time.perf_counter()
         events = self.smash_events_threaded()
+        t2 = time.perf_counter()
         events = self.process_smashed_events(events)
+        t3 = time.perf_counter()
         metadata = {
             "sourcetype": "azure:security:finding",
             "index": self.get_output_index(),
@@ -816,8 +840,12 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         self.logger.debug(
             f"events for writing: {len(events)} \nmetadata: {metadata} \nexample event: {events[0]}"
         )
-
+        t4 = time.perf_counter()
         self.write_events(event_writer, events, metadata)
+        t5 = time.perf_counter()
+        self.logger.info(
+            f"times: smash_events_threaded:{t2-t1}, process_smashed_events:{t3-t2}, t3-t4:{t4-t3}, write_events:{t5-t3}"
+        )
         return events
 
     # def collect_events_old(self, event_writer):
