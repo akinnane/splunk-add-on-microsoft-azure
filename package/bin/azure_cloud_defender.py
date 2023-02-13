@@ -40,7 +40,7 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         self.global_checkbox_fields = None
         self.session = None
         self.session_start_time = datetime.now()
-        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=30)
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=40)
 
     def get_scheme(self):
         """overloaded splunklib modularinput method"""
@@ -468,9 +468,19 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
 
     def get_items(self, url):
         """Get all items from an endpoint"""
-        response = azutils.get_items_batch_session(
-            helper=self, url=url, session=self.get_session()
-        )
+        try_count = 0
+        while True:
+            try:
+                response = azutils.get_items_batch_session(
+                    helper=self, url=url, session=self.get_session()
+                )
+                break
+            except Exception as e:
+                self.logger.warn(str(e))
+                if try_count > 3:
+                    raise e
+                try_count += 1
+                continue
 
         items = None if response is None else response["value"]
 
@@ -478,9 +488,19 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         while items:
             events += items
 
-            response = azutils.handle_nextLink(
-                helper=self, response=response, session=self.get_session()
-            )
+            try_count = 0
+            while True:
+                try:
+                    response = azutils.handle_nextLink(
+                        helper=self, response=response, session=self.get_session()
+                    )
+                    break
+                except Exception as e:
+                    self.logger.warn(str(e))
+                    if try_count > 3:
+                        raise e
+                    try_count += 1
+                    continue
 
             items = None if response is None else response["value"]
 
@@ -697,9 +717,9 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
 
     def smash_events_subscription(self, subscription_id):
         return_value = {}
-        return_value.update({"tasks": []})
-        return_value.update({"assessments": []})
-        return_value.update({"assessment_metadata": []})
+        return_value.update({"tasks": {}})
+        return_value.update({"assessments": {}})
+        return_value.update({"assessment_metadata": {}})
 
         assessments = self.executor.submit(self.get_assessments, subscription_id)
         tasks = self.executor.submit(
@@ -717,13 +737,15 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         self.logger.debug(
             f"smash_events_subscriptions():len(assessments) = {len(assessments)}"
         )
-        return_value["assessments"] = assessments
+        return_value["assessments"].update({subscription_id: assessments})
 
         tasks = tasks.result()
         tasks = list(self.executor.map(self.smash_task_sub_assessments, tasks))
-        return_value["tasks"] = tasks
+        return_value["tasks"].update({subscription_id: tasks})
 
-        return_value["assessment_metadata"] = assessment_metadata.result()
+        return_value["assessment_metadata"].update(
+            {subscription_id: assessment_metadata.result()}
+        )
 
         return return_value
 
@@ -734,14 +756,25 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         return_value.update({"assessments": {}})
         return_value.update({"assessment_metadata": {}})
 
-        for subscription_id in self.subscription_ids(subscriptions):
-            r = self.smash_events_subscription(subscription_id)
+        results = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            for subscription_id in self.subscription_ids(subscriptions):
+                results.append(
+                    executor.submit(self.smash_events_subscription, subscription_id)
+                )
 
-            return_value["tasks"].update({subscription_id: r["tasks"]})
-            return_value["assessments"].update({subscription_id: r["assessments"]})
-            return_value["assessment_metadata"].update(
-                {subscription_id: r["assessment_metadata"]}
-            )
+        results = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            for subscription_id in self.subscription_ids(subscriptions):
+                results.append(
+                    executor.submit(self.smash_events_subscription, subscription_id)
+                )
+
+        for r in results:
+            r = r.result()
+            return_value["tasks"].update(r["tasks"])
+            return_value["assessments"].update(r["assessments"])
+            return_value["assessment_metadata"].update(r["assessment_metadata"])
 
         return return_value
 
