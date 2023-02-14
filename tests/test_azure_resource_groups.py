@@ -10,7 +10,8 @@ def ew():
             pass
 
         def write_event(self, event):
-            print(event)
+            pass
+            # print(event)
 
     return EventWriter()
 
@@ -52,9 +53,9 @@ def test_can_instantiate(arg):
 
 
 @pytest.mark.live
-def test_arg_collect_events(arg, ew):
+def test_arg_get_resource_groups(arg, ew):
     events = arg.get_resource_groups("TODO")
-    print(events)
+    # print(events)
     assert events
     assert len(events) == 3
 
@@ -62,6 +63,6 @@ def test_arg_collect_events(arg, ew):
 @pytest.mark.live
 def test_arg_collect_events(arg, ew):
     events = arg.collect_events(ew)
-    print(events)
+    # print(events)
     assert events
     assert len(events) == 8

@@ -29,6 +29,7 @@ import ta_azure_utils.utils as azutils
 from splunklib import modularinput as smi
 from splunktaucclib.modinput_wrapper import base_modinput as base_mi
 import time
+from pprint import pprint
 
 bin_dir = os.path.basename(__file__)
 
@@ -41,6 +42,7 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         self.session = None
         self.session_start_time = datetime.now()
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=40)
+        self.ssphp_run = datetime.now().timestamp()
 
     def get_scheme(self):
         """overloaded splunklib modularinput method"""
@@ -393,30 +395,6 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         )
         return assessment_metadata
 
-    # def assessments_url(self, subscription_id, check_point=None):
-    #     url = f"{self.management_base_url()}/subscriptions/{subscription_id}/providers/Microsoft.Security/assessments?api-version=2020-01-01"
-    #     if check_point:
-    #         url += f"&$filter=Properties/LastStateChangeTimeUtc gt {check_point}"
-    #     return url
-
-    # def assessments_metadata(self, subscription_id):
-    #     """Metadata for Defender Task Splunk ingestion"""
-    #     return {
-    #         "sourcetype": self.get_arg("security_assessment_sourcetype"),
-    #         "index": self.get_output_index(),
-    #         "source": f"{self.input_type}:{subscription_id}",
-    #     }
-
-    # def get_assessments(self, subscription_id):
-    #     """Get security center tasks"""
-    #     # check_point_key = f"asc_tasks_st_date_{self.get_input_stanza_names()}"
-    #     # check_point = self.get_check_point(check_point_key)
-    #     url = self.assessments_url(subscription_id, None)
-    #     # event_date_key = "lastStateChangeTimeUtc"
-    #     assessments = self.get_items(url)
-    #     self.log_debug(f"get_assessments() url={url} tasks={len(assessments)}")
-    #     return assessments
-
     def contacts_url(self, subscription_id, check_point=None):
         url = f"{self.management_base_url()}/subscriptions/{subscription_id}/providers/Microsoft.SecuritysecurityContacts?api-version=2020-01-01-preview"
         if check_point:
@@ -505,6 +483,83 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
             items = None if response is None else response["value"]
 
         return events
+
+    def process_smashed_events(self, events):
+        new = []
+
+        used_assesments_ids = set()
+
+        for sub_id, tasks in events["tasks"].items():
+
+            for task in tasks:
+
+                out = {}
+                new.append(out)
+                out["task"] = task
+
+                if "assessmentKey" not in task["properties"]["securityTaskParameters"]:
+                    continue
+
+                out["assessment"] = []
+                for assessment in events["assessments"][sub_id]:
+                    if (
+                        task["properties"]["securityTaskParameters"]["assessmentKey"]
+                        in assessment["id"]
+                    ) and (
+                        (
+                            # Task ID == Assesment Resource ID
+                            task.get("properties", {})
+                            .get("securityTaskParameters", {})
+                            .get("resourceId", "")
+                            == assessment.get("properties", {})
+                            .get("resourceDetails", {})
+                            .get("Id", "")
+                        )
+                        or (
+                            # Task ID in "Assesment Resource ID/"
+                            # Catch subresources but exclude resources on the same hierarchical level with simular name
+                            task.get("properties", {})
+                            .get("securityTaskParameters", {})
+                            .get("resourceId", "")
+                            + "/"
+                            in assessment.get("properties", {})
+                            .get("resourceDetails", {})
+                            .get("Id", "")
+                        )
+                    ):
+                        out["assessments"].append(assessment)
+                    else:
+                        continue
+
+                    for metadata in events["assessment_metadata"][sub_id]:
+                        if metadata["name"] in assessment["id"]:
+                            assessment.update({"metadata": metadata})
+
+                    used_assesments_ids.add(assessment["id"])
+
+        self.logger.debug(f"events['assessments']: {len(events['assessments'])}")
+
+        unused_assessments = {}
+        for sub_id, assessments in events["assessments"].items():
+            for assessment in assessments:
+                if assessment["id"] not in used_assesments_ids:
+                    subscription_assessments = unused_assessments.get(sub_id, [])
+                    subscription_assessments.append(assessment)
+                    unused_assessments[sub_id] = subscription_assessments
+
+        self.logger.debug(
+            f"assessments: {len(assessments)}, used_assessments:{len(used_assesments_ids)}"
+        )
+
+        for sub_id, assessments in unused_assessments.items():
+            for assessment in assessments:
+                out = {}
+                new.append(out)
+                out["assessments"] = assessment
+                for metadata in events["assessment_metadata"][sub_id]:
+                    if metadata["name"] in assessment["id"]:
+                        assessment.update({"metadata": metadata})
+        return new
 
     def get_items_checkpoint(self, url, check_point_key, event_date_key):
         """Get an item collection using a k/v checkpoint to only retrieve the
@@ -595,11 +650,6 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                 if not assessment_sub_assessments:
                     continue
 
-                #     assessment_sub_assessments = [
-                #         i.update({"AK_SOURCE": f"assessment_id:{assessment['id']}"})
-                #         for i in assessment_sub_assessments
-                #     ]
-
                 assessment.update({"sub_assessments": assessment_sub_assessments})
 
             tasks = self.get_tasks(subscription_id, use_check_point=False)
@@ -633,11 +683,6 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                 task.get("meta").update({"sub_assessments": len(task_sub_assessments)})
                 if not task_sub_assessments:
                     continue
-
-                # task_sub_assessments = [
-                #     i.update({"AK_TASK_SOURCE": f"task_id:{task['id']}"})
-                #     for i in task_sub_assessments
-                # ]
 
                 task.update({"sub_assessments": task_sub_assessments})
 
@@ -707,11 +752,6 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         if not task_sub_assessments:
             return task
 
-            # task_sub_assessments = [
-            #     i.update({"AK_TASK_SOURCE": f"task_id:{task['id']}"})
-            #     for i in task_sub_assessments
-            # ]
-
         task.update({"sub_assessments": task_sub_assessments})
         return task
 
@@ -734,9 +774,7 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
             self.executor.map(self.smash_assessment_sub_assessment, assessments)
         )
 
-        self.logger.debug(
-            f"smash_events_subscriptions():len(assessments) = {len(assessments)}"
-        )
+
         return_value["assessments"].update({subscription_id: assessments})
 
         tasks = tasks.result()
@@ -747,43 +785,16 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
             {subscription_id: assessment_metadata.result()}
         )
 
-        return return_value
-
-    def smash_events_threaded(self):
-        subscriptions = self.get_subscriptions()
-        return_value = {}
-        return_value.update({"tasks": {}})
-        return_value.update({"assessments": {}})
-        return_value.update({"assessment_metadata": {}})
-
-        results = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-            for subscription_id in self.subscription_ids(subscriptions):
-                results.append(
-                    executor.submit(self.smash_events_subscription, subscription_id)
-                )
-
-        results = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-            for subscription_id in self.subscription_ids(subscriptions):
-                results.append(
-                    executor.submit(self.smash_events_subscription, subscription_id)
-                )
-
-        for r in results:
-            r = r.result()
-            return_value["tasks"].update(r["tasks"])
-            return_value["assessments"].update(r["assessments"])
-            return_value["assessment_metadata"].update(r["assessment_metadata"])
-
-        return return_value
-
-    def process_smashed_events(self, events):
-        new = []
+        self.logger.info(
+            f"smash_events_subscriptions():{subscription_id} len(assessments)={len(assessments)} len(tasks)={len(tasks)}"
+        )
 
         used_assesments_ids = set()
 
-        for sub_id, tasks in events["tasks"].items():
+        new = []
+
+
+        for sub_id, tasks in return_value["tasks"].items():
 
             for task in tasks:
 
@@ -791,12 +802,13 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                 new.append(out)
                 out["task"] = task
 
+
                 if "assessmentKey" not in task["properties"]["securityTaskParameters"]:
                     continue
 
-                out["assessments"] = []
-                for assessment in events["assessments"][sub_id]:
+                for assessment in return_value["assessments"][sub_id]:
                     if (
+                        # Task assessment key equals the assesment id
                         task["properties"]["securityTaskParameters"]["assessmentKey"]
                         in assessment["id"]
                     ) and (
@@ -821,195 +833,143 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                             .get("Id", "")
                         )
                     ):
-                        out["assessments"].append(assessment)
+                        
+
+                        out_assessments = out.get("assessments", [])
+                        out_assessments.append(assessment)
                     else:
                         continue
 
-                    for metadata in events["assessment_metadata"][sub_id]:
+                    for metadata in return_value["assessment_metadata"][sub_id]:
                         if metadata["name"] in assessment["id"]:
                             assessment.update({"metadata": metadata})
 
                     used_assesments_ids.add(assessment["id"])
 
-        self.logger.debug(f"events['assessments']: {len(events['assessments'])}")
 
-        unused_assessments = {}
-        for sub_id, assessments in events["assessments"].items():
+        self.logger.debug(f"sub_id:{sub_id}, return_value['assessments']: {len(return_value['assessments'])}")
+
+        used_assessments = {}
+        for sub_id, assessments in return_value["assessments"].items():
             for assessment in assessments:
                 if assessment["id"] not in used_assesments_ids:
-                    subscription_assessments = unused_assessments.get(sub_id, [])
+                    subscription_assessments = used_assessments.get(sub_id, [])
                     subscription_assessments.append(assessment)
-                    unused_assessments[sub_id] = subscription_assessments
+                    used_assessments[sub_id] = subscription_assessments
 
-        self.logger.debug(
-            f"assessments: {len(assessments)}, used_assessments:{used_assesments_ids}"
-        )
 
-        for sub_id, assessments in unused_assessments.items():
+
+        for sub_id, assessments in used_assessments.items():
             for assessment in assessments:
                 out = {}
                 new.append(out)
-                out["assessment"] = assessment
-                for metadata in events["assessment_metadata"][sub_id]:
+                out['assessments'] = []
+                out["assessments"].append(assessment)
+                for metadata in return_value["assessment_metadata"][sub_id]:
                     if metadata["name"] in assessment["id"]:
                         assessment.update({"metadata": metadata})
-        return new
 
-    def collect_events(self, event_writer):
-        t1 = time.perf_counter()
-        events = self.smash_events_threaded()
-        t2 = time.perf_counter()
-        events = self.process_smashed_events(events)
-        t3 = time.perf_counter()
+        self.logger.error(
+            f"sub_id:{sub_id}, assessments:{len(assessments)}, used_assessments:{len(used_assessments)} new:{len(new)}"
+        )                        
+                   
+        return new
+        
+
+    def smash_events_threaded(self):
+        subscriptions = self.get_subscriptions()
+
+        results = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            for subscription_id in self.subscription_ids(subscriptions):
+                results.append(
+                    executor.submit(self.smash_events_subscription, subscription_id)
+                )
+                
+        self.logger.info(f"results:{len(results)}")
+        
         metadata = {
             "sourcetype": "azure:security:finding",
             "index": self.get_output_index(),
             "source": f"{self.input_type}",
         }
-        t = datetime.now().timestamp()
-        for e in events:
-            e["SSPHP_RUN"] = t
+        
+        while True:
+            if results:
+                r = results.pop(0)
+            else:
+                break
+            
+            if not r.done():
+                results.append(r)
+                continue
+            
+            r = r.result()
+            for event in r:
 
-        self.logger.debug(
-            f"events for writing: {len(events)} \nmetadata: {metadata} \nexample event: {events[0]}"
-        )
-        t4 = time.perf_counter()
-        self.write_events(event_writer, events, metadata)
-        t5 = time.perf_counter()
+                event["SSPHP_RUN"] = self.ssphp_run
+                if 'assessments' in event and len(event['assessments']) != 1:
+                    print(event)
+                    assert "wrong number of assessments" == False
+
+                # if event['task'] != 1:
+                #     print(event)
+                #     assert "wrong nubmer of tasks" == False
+
+                # if 'assessments' in event and 'tasks' in event:
+                #     print (event)
+                #     assert "ass and task" == False
+                details = {
+                    'event["task"]["id"]': event.get('task', {}).get('id', None),
+                    'event["task"]["properties"]["securityTaskParameters"]["assessmentKey"]': event.get('task', {}).get('properties', {}).get("securityTaskParameters", {}).get("assessmentKey", None),
+                    'event["task"]["properties"]["securityTaskParameters"]["resourceId"]': event.get('task', {}).get("properties", {})
+                            .get("securityTaskParameters", {})
+                            .get("resourceId", ""),
+                    'event["assessments"]["id"]': event.get("assessments", [{}])[0].get("id", None),
+                    'event["assessments"]["properties"]["resourceDetails"]["Id"]': event.get("assessments", [{}])[0].get("properties", {}).get("resourceDetails", {}).get("Id", None)
+                    }
+                d = str(details)
+                if '777' in d:
+                    pprint(details)
+                    pprint(event)
+                event = self.new_event(
+                data=json.dumps(event),
+                source=metadata["source"],
+                index=metadata["index"],
+                sourcetype=metadata["sourcetype"],
+            )
+            self.event_writer.write_event(event)
+                
+
+
+
+    def collect_events(self, event_writer):
+        self.event_writer = event_writer
+        t1 = time.perf_counter()
+        events = self.smash_events_threaded()
+        t2 = time.perf_counter()
+        # events = self.process_smashed_events(events)
+        # t3 = time.perf_counter()
+        # metadata = {
+        #     "sourcetype": "azure:security:finding",
+        #     "index": self.get_output_index(),
+        #     "source": f"{self.input_type}",
+        # }
+        # for e in events:
+        #     for ee in e:
+        #         e["SSPHP_RUN"] = self.ssphp_run
+                
+
+        # self.logger.debug(
+        #     f"events for writing: {len(events)} \nmetadata: {metadata} \nexample event: {events[0]}"
+        # )
+        # t4 = time.perf_counter()
+        # self.write_events(event_writer, events, metadata)
+        # t5 = time.perf_counter()
         self.logger.info(
-            f"times: smash_events_threaded:{t2-t1}, process_smashed_events:{t3-t2}, t3-t4:{t4-t3}, write_events:{t5-t3}"
+            f"times: smash_events_threaded:{t2-t1}" # process_smashed_events:{t3-t2}, t3-t4:{t4-t3}, write_events:{t5-t3}"
         )
         return events
-
-    # def collect_events_old(self, event_writer):
-    #     """Poll for all subscriptions then iterrate through each and get alerts and tasks"""
-    #     subscriptions = self.get_subscriptions()
-
-    #     return_value = {}
-
-    #     if False:  # self.get_arg("collect_subscriptions"):
-    #         self.write_events(event_writer, subscriptions, self.subscription_metadata())
-
-    #     if self.get_arg("collect_security_center_alerts"):
-    #         return_value.update({"alerts": {}})
-    #         for subscription_id in self.subscription_ids(subscriptions):
-    #             alerts = self.get_alerts(subscription_id)
-
-    #             self.write_events(event_writer, alerts, self.alert_metadata())
-
-    #             return_value["alerts"].update({subscription_id: alerts})
-
-    #     if self.get_arg("collect_security_center_tasks"):
-    #         return_value.update({"tasks": {}})
-    #         for subscription_id in self.subscription_ids(subscriptions):
-    #             tasks = self.get_tasks(subscription_id)
-
-    #             self.write_events(event_writer, tasks, self.task_metadata())
-
-    #             return_value["tasks"].update({subscription_id: tasks})
-
-    #             for task in tasks:
-    #                 if "properties" not in assessment:
-    #                     continue
-    #                 if "additionalData" not in assessment["properties"]:
-    #                     continue
-    #                 if (
-    #                     "subAssessmentsLink"
-    #                     not in assessment["properties"]["additionalData"]
-    #                 ):
-    #                     continue
-
-    #                 sub_assessment = self.get_sub_assessment(
-    #                     subscription_id, assessment["name"]
-    #                 )
-
-    #                 self.write_events(
-    #                     event_writer,
-    #                     sub_assessment,
-    #                     self.sub_assessment_metadata(
-    #                         subscription_id, assessment["name"]
-    #                     ),
-    #                 )
-
-    #     if self.get_arg("collect_security_assessments"):
-    #         return_value.update({"assessments": {}})
-    #         return_value.update({"sub_assessments": {}})
-    #         return_value.update({"assessment_metadata": {}})
-
-    #         for subscription_id in self.subscription_ids(subscriptions):
-    #             assessments = self.get_assessments(subscription_id)
-    #             self.write_events(
-    #                 event_writer,
-    #                 assessments,
-    #                 self.assessments_metadata(subscription_id),
-    #             )
-
-    #             return_value["assessments"].update({subscription_id: assessments})
-
-    #             for assessment in assessments:
-    #                 if "properties" not in assessment:
-    #                     continue
-    #                 if "additionalData" not in assessment["properties"]:
-    #                     continue
-    #                 if (
-    #                     "subAssessmentsLink"
-    #                     not in assessment["properties"]["additionalData"]
-    #                 ):
-    #                     continue
-
-    #                 sub_assessment = self.get_sub_assessment(
-    #                     subscription_id, assessment["name"]
-    #                 )
-
-    #                 self.write_events(
-    #                     event_writer,
-    #                     sub_assessment,
-    #                     self.sub_assessment_metadata(
-    #                         subscription_id, assessment["name"]
-    #                     ),
-    #                 )
-
-    #             sub_assessments = self.get_sub_assessments(subscription_id)
-    #             self.write_events(
-    #                 event_writer,
-    #                 sub_assessments,
-    #                 self.sub_assessments_metadata(subscription_id),
-    #             )
-    #             return_value["sub_assessments"].update(
-    #                 {subscription_id: sub_assessments}
-    #             )
-
-    #             assessment_metadata = self.get_assessment_metadata(subscription_id)
-    #             self.write_events(
-    #                 event_writer,
-    #                 assessment_metadata,
-    #                 self.assessment_metadata_metadata(subscription_id),
-    #             )
-    #             return_value["assessment_metadata"].update(
-    #                 {subscription_id: assessment_metadata}
-    #             )
-
-    #     # Azure API response doesn't match documentation
-    #     # https://learn.microsoft.com/en-us/rest/api/defenderforcloud/security-contacts/list?tabs=HTTP
-    #     if False:
-    #         return_value.update({"contacts": {}})
-    #         for subscription_id in self.subscription_ids(subscriptions):
-    #             contacts = self.get_contacts(subscription_id)
-
-    #             self.write_events(event_writer, contacts, self.contacts_metadata())
-    #             return_value["contacts"].update({subscription_id: contacts})
-
-    #     if True:
-    #         return_value.update({"secure_score": {}})
-    #         for subscription_id in self.subscription_ids(subscriptions):
-    #             secure_score = self.get_secure_score(subscription_id)
-
-    #             self.write_events(
-    #                 event_writer, secure_score, self.secure_score_metadata()
-    #             )
-    #             return_value["secure_score"].update({subscription_id: secure_score})
-
-    #     return return_value
 
     def get_account_fields(self):
         account_fields = []

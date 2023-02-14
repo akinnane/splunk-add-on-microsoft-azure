@@ -187,7 +187,6 @@ class ModInputazure_resource_group(base_mi.BaseModInput):
 
     def collect_events(self, event_writer):
         subscriptions = self.get_subscriptions()
-        print(subscriptions)
 
         groups = []
         for subscription_id in self.subscription_ids(subscriptions):

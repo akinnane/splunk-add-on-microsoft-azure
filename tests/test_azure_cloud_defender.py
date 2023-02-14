@@ -171,7 +171,7 @@ def test_get_assessment_metadata(acd, sub_ids):
 def test_collect_events(acd, ew):
     events = acd.collect_events(ew)
     assert events
-    pprint(events)
+    print(events)
     assert False
 
 
