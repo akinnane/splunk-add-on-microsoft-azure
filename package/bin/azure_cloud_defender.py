@@ -870,7 +870,7 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                         assessment.update({"metadata": metadata})
 
         self.logger.error(
-            f"sub_id:{sub_id}, assessments:{len(assessments)}, used_assessments:{len(used_assessments)} new:{len(new)}"
+            f"sub_id:{sub_id}, assessments:{len(assessments)}, used_assessments:{len(used_assessments[sub_id])} new:{len(new)}"
         )                        
                    
         return new
@@ -880,11 +880,11 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         subscriptions = self.get_subscriptions()
 
         results = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-            for subscription_id in self.subscription_ids(subscriptions):
-                results.append(
-                    executor.submit(self.smash_events_subscription, subscription_id)
-                )
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=5)
+        for subscription_id in self.subscription_ids(subscriptions):
+            results.append(
+                executor.submit(self.smash_events_subscription, subscription_id)
+            )
                 
         self.logger.info(f"results:{len(results)}")
         
@@ -894,44 +894,46 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
             "source": f"{self.input_type}",
         }
         
-        while True:
-            if results:
-                r = results.pop(0)
-            else:
-                break
+        # while True:
+        #     if results:
+        #         r = results.pop(0)
+        #     else:
+        #         break
             
-            if not r.done():
-                results.append(r)
-                continue
+        #     if not r.done():
+        #         results.append(r)
+        #         continue
             
+        #     r = r.result()
+        #     for event in r:
+        for r in results:
             r = r.result()
             for event in r:
-
                 event["SSPHP_RUN"] = self.ssphp_run
-                if 'assessments' in event and len(event['assessments']) != 1:
-                    print(event)
-                    assert "wrong number of assessments" == False
-
-                # if event['task'] != 1:
+                # if 'assessments' in event and len(event['assessments']) != 1:
                 #     print(event)
-                #     assert "wrong nubmer of tasks" == False
+                #     assert "wrong number of assessments" == False
 
-                # if 'assessments' in event and 'tasks' in event:
-                #     print (event)
-                #     assert "ass and task" == False
-                details = {
-                    'event["task"]["id"]': event.get('task', {}).get('id', None),
-                    'event["task"]["properties"]["securityTaskParameters"]["assessmentKey"]': event.get('task', {}).get('properties', {}).get("securityTaskParameters", {}).get("assessmentKey", None),
-                    'event["task"]["properties"]["securityTaskParameters"]["resourceId"]': event.get('task', {}).get("properties", {})
-                            .get("securityTaskParameters", {})
-                            .get("resourceId", ""),
-                    'event["assessments"]["id"]': event.get("assessments", [{}])[0].get("id", None),
-                    'event["assessments"]["properties"]["resourceDetails"]["Id"]': event.get("assessments", [{}])[0].get("properties", {}).get("resourceDetails", {}).get("Id", None)
-                    }
-                d = str(details)
-                if '777' in d:
-                    pprint(details)
-                    pprint(event)
+                # # if event['task'] != 1:
+                # #     print(event)
+                # #     assert "wrong nubmer of tasks" == False
+
+                # # if 'assessments' in event and 'tasks' in event:
+                # #     print (event)
+                # #     assert "ass and task" == False
+                # details = {
+                #     'event["task"]["id"]': event.get('task', {}).get('id', None),
+                #     'event["task"]["properties"]["securityTaskParameters"]["assessmentKey"]': event.get('task', {}).get('properties', {}).get("securityTaskParameters", {}).get("assessmentKey", None),
+                #     'event["task"]["properties"]["securityTaskParameters"]["resourceId"]': event.get('task', {}).get("properties", {})
+                #             .get("securityTaskParameters", {})
+                #             .get("resourceId", ""),
+                #     'event["assessments"]["id"]': event.get("assessments", [{}])[0].get("id", None),
+                #     'event["assessments"]["properties"]["resourceDetails"]["Id"]': event.get("assessments", [{}])[0].get("properties", {}).get("resourceDetails", {}).get("Id", None)
+                #     }
+                # d = str(details)
+                # if '777' in d:
+                #     pprint(details)
+                #     pprint(event)
                 event = self.new_event(
                     data=json.dumps(event),
                     source=metadata["source"],

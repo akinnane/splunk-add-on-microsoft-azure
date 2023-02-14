@@ -12,8 +12,8 @@ def ew():
             pass
 
         def write_event(self, event):
-            # pprint(event)
-            pass
+            pprint(event)
+            #pass
 
     return EventWriter()
 
