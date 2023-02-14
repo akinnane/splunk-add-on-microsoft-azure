@@ -933,12 +933,12 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                     pprint(details)
                     pprint(event)
                 event = self.new_event(
-                data=json.dumps(event),
-                source=metadata["source"],
-                index=metadata["index"],
-                sourcetype=metadata["sourcetype"],
-            )
-            self.event_writer.write_event(event)
+                    data=json.dumps(event),
+                    source=metadata["source"],
+                    index=metadata["index"],
+                    sourcetype=metadata["sourcetype"],
+                )
+                self.event_writer.write_event(event)
                 
 
 
