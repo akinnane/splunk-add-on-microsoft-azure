@@ -833,10 +833,9 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                             .get("Id", "")
                         )
                     ):
-                        
-
                         out_assessments = out.get("assessments", [])
                         out_assessments.append(assessment)
+                        out['assessments'] = out_assessments
                     else:
                         continue
 
