@@ -271,7 +271,7 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         if not sub_assessment_link:
             return task
 
-        task_sub_assessments = self.get_sub_assessment(sub_assessment_link)
+        task_sub_assessments = self.get_sub_assessments(sub_assessment_link)
 
         if not task_sub_assessments:
             return task
