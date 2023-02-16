@@ -13,7 +13,7 @@ def ew():
 
         def write_event(self, event):
             pprint(event)
-            #pass
+            # pass
 
     return EventWriter()
 
@@ -60,6 +60,63 @@ def sub_ids(acd):
     return acd.subscription_ids(subscriptions)
 
 
+@pytest.mark.live
+def test_get_subscriptions(acd):
+    subscriptions = list(acd.get_subscriptions())
+    assert subscriptions
+
+
+@pytest.mark.live
+def test_get_tasks(acd, sub_ids):
+    for sub_id in sub_ids:
+        tasks = list(acd.get_tasks(sub_id))
+        print(list(task.as_dict() for task in tasks))
+        assert tasks
+
+
+def test_extract_assessment_resource_scope(acd):
+    link = "/subscriptions/63ed7111-101c-4849-9f33-03ef672ed20d/providers/Microsoft.Security/assessments/fde1c0c9-0fd2-4ecc-87b5-98956cbc1095/subAssessments"
+    scope = acd.assessment_resource_scope(link)
+    assert scope == "/subscriptions/63ed7111-101c-4849-9f33-03ef672ed20d"
+
+
+@pytest.mark.live
+def test_get_assessments(acd, sub_ids):
+    for sub_id in sub_ids:
+        assessments = list(acd.get_assessments(sub_id))
+        for assessment in assessments:
+            assert assessment.type == "Microsoft.Security/assessments"
+
+            assessment = acd.smash_assessment_sub_assessment(sub_id, assessment)
+            print(assessment.sub_assessments())
+            if not assessment.sub_assessments():
+                continue
+            # assessment.enable_additional_properties_sending()
+            # assessment._attribute_map.update({"sub_assessments": {'key': 'sub_assessments', 'type': '{object}'}})
+            # assessment.__dict__.update({'sub_assessments': None})
+            # assessment._attribute_map.update({"task": {'key': 'task', 'type': 'SecurityTask'}})
+            # tasks = acd.get_tasks(sub_id)
+            # assessment.__dict__.update({'task': next(tasks) })
+
+            print(assessment._attribute_map)
+            print("as_dict()")
+            print(assessment.as_dict())
+            print("__dict__")
+            print(assessment.__dict__)
+            print("dir")
+            print(dir(assessment))
+            print(assessment.metadata)
+            assert False
+
+
+@pytest.mark.live
+def test_get_assessments_metadata(acd, sub_ids):
+    for sub_id in sub_ids:
+        assessments_metadata = list(acd.get_assessments_metadata(sub_id))
+        for assessment_metadata in assessments_metadata:
+            assert assessment_metadata.type == "Microsoft.Security/assessmentMetadata"
+
+
 # Base Class
 def test_can_instantiate(acd):
     acd = azure_cloud_defender.ModInputAzureCloudDefender()
@@ -83,20 +140,6 @@ def test_assessment_metadata(acd):
     }
 
     assert md == expected
-
-
-def test_assessment_url(acd):
-    subid = "subid123"
-    url = acd.assessments_url(subid)
-    expected = f"https://management.azure.com/subscriptions/{subid}/providers/Microsoft.Security/assessments?api-version=2020-01-01"
-    assert expected == url
-
-
-@pytest.mark.live
-def test_get_assessments(acd, sub_ids):
-    for sub_id in sub_ids:
-        assessments = acd.get_assessments(sub_id)
-        assert assessments
 
 
 @pytest.mark.skip(reason="Azure API response doesn't match documentation")

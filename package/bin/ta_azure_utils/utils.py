@@ -25,6 +25,7 @@ import time
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
 import six
+from azure.identity import DefaultAzureCredential
 
 TIMEOUT = 60 #seconds
 
