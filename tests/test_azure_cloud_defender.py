@@ -78,34 +78,39 @@ def test_extract_assessment_resource_scope(acd):
     link = "/subscriptions/63ed7111-101c-4849-9f33-03ef672ed20d/providers/Microsoft.Security/assessments/fde1c0c9-0fd2-4ecc-87b5-98956cbc1095/subAssessments"
     scope = acd.assessment_resource_scope(link)
     assert scope == "/subscriptions/63ed7111-101c-4849-9f33-03ef672ed20d"
-
+from azure.mgmt.security.v2019_01_01_preview.models import SecuritySubAssessment
 
 @pytest.mark.live
 def test_get_assessments(acd, sub_ids):
+    ssa = SecuritySubAssessment()
     for sub_id in sub_ids:
         assessments = list(acd.get_assessments(sub_id))
         for assessment in assessments:
             assert assessment.type == "Microsoft.Security/assessments"
 
-            assessment = acd.smash_assessment_sub_assessment(sub_id, assessment)
-            print(assessment.sub_assessments())
-            if not assessment.sub_assessments():
-                continue
-            # assessment.enable_additional_properties_sending()
+            assessment = acd.smash_has_assessments_sub_assessment(assessment)
+            print(assessment.sub_assessments)
+            assessment.sub_assessments = [ssa]
+            # if not assessment.sub_assessments:
+            #     continue
+
             # assessment._attribute_map.update({"sub_assessments": {'key': 'sub_assessments', 'type': '{object}'}})
             # assessment.__dict__.update({'sub_assessments': None})
             # assessment._attribute_map.update({"task": {'key': 'task', 'type': 'SecurityTask'}})
             # tasks = acd.get_tasks(sub_id)
             # assessment.__dict__.update({'task': next(tasks) })
+            pprint(ssa.as_dict())
 
-            print(assessment._attribute_map)
+            pprint(assessment._attribute_map)
             print("as_dict()")
-            print(assessment.as_dict())
+            pprint(assessment.as_dict())
+            pprint(assessment.resource_details.serialize(keep_readonly=True))
             print("__dict__")
-            print(assessment.__dict__)
+            pprint(assessment.__dict__)
             print("dir")
             print(dir(assessment))
-            print(assessment.metadata)
+            pprint(assessment.metadata)
+            pprint(assessment.serialize(keep_readonly=True))
             assert False
 
 

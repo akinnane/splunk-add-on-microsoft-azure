@@ -75,14 +75,16 @@ class SecurityTask(SecurityTask):
         return parse_resource_id(self.id)["subscription"]
 
     def add_sub_assessments_to_attribute_map(self):
+        self.enable_additional_properties_sending()        
         self._attribute_map.update(
             {
                 "sub_assessments": {
                     "key": "sub_assessments",
-                    "type": "[SecuritySubAssessment]",
+                    "type": "[object]",
                 }
             }
         )
+        self.sub_assessments = []
         self.__dict__.update({"sub_assessments": []})
 
 
@@ -107,15 +109,17 @@ class SecurityAssessmentResponse(SecurityAssessmentResponse):
         return match.group("scope")
 
     def add_sub_assessments_to_attribute_map(self):
+        self.enable_additional_properties_sending()                
         self._attribute_map.update(
             {
                 "sub_assessments": {
                     "key": "sub_assessments",
-                    "type": "[SecuritySubAssessment]",
+                    "type": "[object]",
                 }
             }
         )
-        self.sub_assessments = []
+        self.sub_assessments = []        
+        self.__dict__.update({"sub_assessments": []})
 
     def subscription_id(self):
         return parse_resource_id(self.id)["subscription"]
@@ -274,26 +278,10 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
             event_writer.write_event(event)
         sys.stdout.flush()
 
-    def smash_assessment_sub_assessment(self, assessment):
-        assessment_sub_assessments = list(self.get_sub_assessments(assessment))
-        if not assessment_sub_assessments:
-            return assessment
-        assessment.add_sub_assessments_to_attribute_map()
-        assessment.sub_assessments = assessment_sub_assessments
-        return assessment
-
-    def smash_task_sub_assessments(self, task):
-        if task.sub_assessment_link():
-            return task
-
-        task_sub_assessments = self.get_sub_assessments(task)
-
-        if not task_sub_assessments:
-            return task
-
-        task.add_sub_assessments_to_attribute_map()
-        task.update({"sub_assessments": task_sub_assessments})
-        return task
+    def smash_has_assessments_sub_assessment(self, has_assessments):
+        has_assessments.add_sub_assessments_to_attribute_map()        
+        has_assessments.sub_assessments = list(self.get_sub_assessments(has_assessments))    
+        return has_assessments
 
     def smash_events_subscription(self, subscription_id):
         return_value = {}
