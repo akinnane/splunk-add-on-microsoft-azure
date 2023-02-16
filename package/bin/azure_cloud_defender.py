@@ -17,7 +17,6 @@ limitations under the License.
 
 """
 import concurrent.futures
-import json
 import os
 import sys
 from datetime import datetime
@@ -39,6 +38,16 @@ import re
 
 
 class SecurityTask(SecurityTask):
+    subassessment_resource_scope_regex = re.compile(
+        "(?P<scope>.*?)/providers/Microsoft.Security/assessments/(?P<assessment_name>[^/]+)/subAssessments"
+    )
+
+    def sub_assessment_resource_scope(self):
+        match = self.subassessment_resource_scope_regex.search(
+            self.sub_assessment_link()
+        )
+        return match.group("scope")
+
     def assessment_key(self):
         return self.security_task_parameters.additional_properties.get(
             "assessmentKey", None
@@ -48,6 +57,19 @@ class SecurityTask(SecurityTask):
         return self.security_task_parameters.additional_properties.get(
             "resourceId", None
         )
+
+    def sub_assessment_link(self):
+        details = task.security_task_parameters.additional_properties.get("details", [])
+
+        sub_assessment_link = next(
+            (
+                detail["value"]
+                for detail in details
+                if detail["name"] == "subAssessmentsLink"
+            ),
+            None,
+        )
+        return sub_assessment_link
 
     def subscription_id(self):
         return parse_resource_id(self.id)["subscription"]
@@ -66,7 +88,7 @@ class SecurityTask(SecurityTask):
 
 class SecurityAssessmentResponse(SecurityAssessmentResponse):
     subassessment_resource_scope_regex = re.compile(
-        "(?P<scope>.*?)/providers/Microsoft.Security/assessments/[^/]+/subAssessments"
+        "(?P<scope>.*?)/providers/Microsoft.Security/assessments/(?P<assessment_name>[^/]+)/subAssessments"
     )
 
     def sub_assessment_link(self):
@@ -74,6 +96,9 @@ class SecurityAssessmentResponse(SecurityAssessmentResponse):
             return self.additional_data.get("subAssessmentsLink", None)
         else:
             return None
+
+    def assessment_key(self):
+        return self.name
 
     def sub_assessment_resource_scope(self):
         match = self.subassessment_resource_scope_regex.search(
@@ -220,13 +245,14 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         ).assessments.list(f"/subscriptions/{subscription_id}")
         return assessments
 
-    def get_sub_assessments(self, assessment):
-        if not assessment.sub_assessment_link():
+    def get_sub_assessments(self, has_sub_assessments):
+        if not has_sub_assessments.sub_assessment_link():
             return []
         sub_assessments = self.security_center(
-            assessment.subscription_id(), "sub_assessments"
+            has_sub_assessments.subscription_id(), "sub_assessments"
         ).sub_assessments.list(
-            assessment.sub_assessment_resource_scope(), assessment.name
+            has_sub_assessments.sub_assessment_resource_scope(),
+            has_sub_assessments.assessment_key(),
         )
         return sub_assessments
 
@@ -257,21 +283,10 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         return assessment
 
     def smash_task_sub_assessments(self, task):
-        details = task.security_task_parameters.additional_properties.get("details", [])
-
-        sub_assessment_link = next(
-            (
-                detail["value"]
-                for detail in details
-                if detail["name"] == "subAssessmentsLink"
-            ),
-            None,
-        )
-
-        if not sub_assessment_link:
+        if task.sub_assessment_link():
             return task
 
-        task_sub_assessments = self.get_sub_assessments(sub_assessment_link)
+        task_sub_assessments = self.get_sub_assessments(task)
 
         if not task_sub_assessments:
             return task
