@@ -21,7 +21,7 @@ import os
 import sys
 from datetime import datetime
 import import_declare_test
-
+import json
 from splunklib import modularinput as smi
 from splunktaucclib.modinput_wrapper import base_modinput as base_mi
 import time
@@ -59,7 +59,7 @@ class SecurityTask(SecurityTask):
         )
 
     def sub_assessment_link(self):
-        details = task.security_task_parameters.additional_properties.get("details", [])
+        details = self.security_task_parameters.additional_properties.get("details", [])
 
         sub_assessment_link = next(
             (
