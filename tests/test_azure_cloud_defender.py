@@ -1,8 +1,13 @@
 import os
 import pytest
 import azure_cloud_defender
-from pprint import pprint
+from pprint import PrettyPrinter
 import json
+from azure.mgmt.security.v2019_01_01_preview.models import SecuritySubAssessment
+
+import azure
+
+PP = PrettyPrinter(indent=4, width=300, compact=False, sort_dicts=True).pprint
 
 
 @pytest.fixture
