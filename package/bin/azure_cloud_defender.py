@@ -362,13 +362,19 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                         sub_assessments += assessment.sub_assessments
                         assessment.sub_assesments = []
 
-                    event["sub_assessments"] = [
-                        sa.serialize(keep_readonly=True) for sa in list(set(sub_assessments))
+                    sub_assessments = [
+                        sa.serialize(keep_readonly=True)
+                        for sa in list(set(sub_assessments))
                     ]
+
+                    if sub_assessments:
+                        event["sub_assessments"] = sub_assessments
+
                 else:
                     if hasattr(task, "sub_assessments") and task.sub_assessments:
                         event["sub_assessments"] = [
-                            sa.serialize(keep_readonly=True) for sa in task.sub_assessments
+                            sa.serialize(keep_readonly=True)
+                            for sa in task.sub_assessments
                         ]
                         task.sub_assesments = []
                     continue
@@ -389,7 +395,8 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                     and assessment.sub_assessments
                 ):
                     event["sub_assessments"] = [
-                        sa.serialize(keep_readonly=True) for sa in assessment.sub_assessments
+                        sa.serialize(keep_readonly=True)
+                        for sa in assessment.sub_assessments
                     ]
                     assessment.sub_assesments = []
 
@@ -418,7 +425,8 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         }
 
         count = 0
-        for r in results:
+
+        for r in concurrent.futures.as_completed(results):
             r = r.result()
             for event in r:
                 event["SSPHP_RUN"] = self.ssphp_run
