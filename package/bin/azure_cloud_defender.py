@@ -26,6 +26,7 @@ from datetime import datetime
 
 # import azure
 import import_declare_test
+from azure.core.exceptions import AzureError
 from azure.identity import ClientSecretCredential
 from azure.mgmt.security import SecurityCenter
 from azure.mgmt.security.v2015_06_01_preview.models import SecurityTask
@@ -257,12 +258,16 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
     def get_sub_assessments(self, has_sub_assessments):
         if not has_sub_assessments.sub_assessment_link():
             return []
-        sub_assessments = self.security_center(
-            has_sub_assessments.subscription_id(), "sub_assessments"
-        ).sub_assessments.list(
-            has_sub_assessments.sub_assessment_resource_scope(),
-            has_sub_assessments.assessment_key(),
-        )
+        try:
+            sub_assessments = self.security_center(
+                has_sub_assessments.subscription_id(), "sub_assessments"
+            ).sub_assessments.list(
+                has_sub_assessments.sub_assessment_resource_scope(),
+                has_sub_assessments.assessment_key(),
+            )
+        except AzureError as e:
+            self.logger.error(e)
+            sub_assessments = []
         return sub_assessments
 
     def get_assessments_metadata(self, subscription_id):
