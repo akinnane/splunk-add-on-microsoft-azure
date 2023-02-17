@@ -38,6 +38,14 @@ from splunklib import modularinput as smi
 from splunktaucclib.modinput_wrapper import base_modinput as base_mi
 
 
+class SecuritySubAssessment(SecuritySubAssessment):
+    def __lt__(self, other):
+        return self.id.cmp(other.id)
+
+    def __hash__(self):
+        return hash(self.id)
+
+
 class SecurityTask(SecurityTask):
     subassessment_resource_scope_regex = re.compile(
         "(?P<scope>.*?)/providers/Microsoft.Security/assessments/(?P<assessment_name>[^/]+)/subAssessments"
@@ -104,10 +112,10 @@ class SecurityAssessmentResponse(SecurityAssessmentResponse):
 
 
 sub_assessments_attribute_map = {
-    "sub_assessments": {
-        "key": "sub_assessments",
-        "type": "[SecuritySubAssessment]",
-    },
+    # "sub_assessments": {
+    #     "key": "sub_assessments",
+    #     "type": "[SecuritySubAssessment]",
+    # },
     "metadata": {
         "key": "properties.metadata",
         "type": "SecurityAssessmentMetadataResponse",
@@ -119,6 +127,9 @@ SecurityAssessmentResponse._attribute_map.update(sub_assessments_attribute_map)
 
 SecurityTask._attribute_map.update(sub_assessments_attribute_map)
 
+azure.mgmt.security.v2019_01_01_preview.models.SecuritySubAssessment = (
+    SecuritySubAssessment
+)
 
 azure.mgmt.security.v2021_06_01.models.SecurityAssessmentResponse = (
     SecurityAssessmentResponse
@@ -338,7 +349,28 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                     event["assessment"] = assessment.serialize(keep_readonly=True)
                     event["meta"]["assessment"] = parse_resource_id(assessment.id)
                     used_assessment_ids.add(assessment.id)
+
+                    sub_assessments = []
+                    if hasattr(task, "sub_assessments") and task.sub_assessments:
+                        sub_assessments += task.sub_assessments
+                        task.sub_assesments = []
+
+                    if (
+                        hasattr(assessment, "sub_assessments")
+                        and assessment.sub_assessments
+                    ):
+                        sub_assessments += assessment.sub_assessments
+                        assessment.sub_assesments = []
+
+                    event["sub_assessments"] = [
+                        sa.serialize(keep_readonly=True) for sa in list(set(sub_assessments))
+                    ]
                 else:
+                    if hasattr(task, "sub_assessments") and task.sub_assessments:
+                        event["sub_assessments"] = [
+                            sa.serialize(keep_readonly=True) for sa in task.sub_assessments
+                        ]
+                        task.sub_assesments = []
                     continue
 
         for assessment in assessments:
@@ -351,6 +383,16 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                 event["meta"] = {}
                 event["meta"]["assessment"] = parse_resource_id(assessment.id)
                 event["assessment"] = assessment.serialize(keep_readonly=True)
+
+                if (
+                    hasattr(assessment, "sub_assessments")
+                    and assessment.sub_assessments
+                ):
+                    event["sub_assessments"] = [
+                        sa.serialize(keep_readonly=True) for sa in assessment.sub_assessments
+                    ]
+                    assessment.sub_assesments = []
+
                 events.append(event)
 
         self.logger.info(
