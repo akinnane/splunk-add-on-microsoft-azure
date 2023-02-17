@@ -51,12 +51,12 @@ class SecurityTask(SecurityTask):
 
     def assessment_key(self):
         return self.security_task_parameters.additional_properties.get(
-            "assessmentKey", None
+            "assessmentKey", "NOASSESSMENTKEY"
         )
 
     def resource_id(self):
         return self.security_task_parameters.additional_properties.get(
-            "resourceId", None
+            "resourceId", "NORESOURCEID"
         )
 
     def sub_assessment_link(self):
@@ -100,7 +100,7 @@ class SecurityAssessmentResponse(SecurityAssessmentResponse):
         return parse_resource_id(self.id)["subscription"]
 
     def resource_id(self):
-        return self.resource_details.additional_properties.get("Id", None)
+        return self.resource_details.additional_properties.get("Id", "NORESOURCEID")
 
 
 sub_assessments_attribute_map = {
