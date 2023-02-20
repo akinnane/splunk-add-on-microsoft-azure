@@ -157,7 +157,7 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         super().__init__("ta_ms_aad", "azure_cloud_defender", use_single_instance)
         self.global_checkbox_fields = None
         self.session = None
-        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=10)
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=40)
         self.ssphp_run = datetime.now().timestamp()
         self._security_center = {}
 
@@ -423,8 +423,11 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
             if "assessment" in event:
                 event["meta"]["assessment"] = {}
                 event["meta"]["assessment"]["id"] = parse_resource_id(assessment.id)
-                event["meta"]["assessment"]["resourceId"] = parse_resource_id(
-                    assessment.resource_details.id
+                # print(dir(assessment.resource_details.additional_properties))
+                resource_id = assessment.resource_details.additional_properties.get('Id')
+                if resource_id:
+                    event["meta"]["assessment"]["resourceId"] = parse_resource_id(
+                    resource_id
                 )
 
         self.logger.info(
