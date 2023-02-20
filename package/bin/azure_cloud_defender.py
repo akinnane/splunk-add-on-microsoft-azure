@@ -157,7 +157,7 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         super().__init__("ta_ms_aad", "azure_cloud_defender", use_single_instance)
         self.global_checkbox_fields = None
         self.session = None
-        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=40)
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=10)
         self.ssphp_run = datetime.now().timestamp()
         self._security_center = {}
 
@@ -255,21 +255,6 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         ).assessments.list(f"/subscriptions/{subscription_id}")
         return assessments
 
-    def get_sub_assessments(self, has_sub_assessments):
-        if not has_sub_assessments.sub_assessment_link():
-            return []
-        try:
-            sub_assessments = self.security_center(
-                has_sub_assessments.subscription_id(), "sub_assessments"
-            ).sub_assessments.list(
-                has_sub_assessments.sub_assessment_resource_scope(),
-                has_sub_assessments.assessment_key(),
-            )
-        except AzureError as e:
-            self.logger.error(e)
-            sub_assessments = []
-        return sub_assessments
-
     def get_assessments_metadata(self, subscription_id):
         assessment_metadata = self.security_center(
             subscription_id, "assessment_metadata"
@@ -288,7 +273,23 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
             event_writer.write_event(event)
         sys.stdout.flush()
 
+    def get_sub_assessments(self, has_sub_assessments):
+        if not has_sub_assessments.sub_assessment_link():
+            return []
+        try:
+            sub_assessments = self.security_center(
+                has_sub_assessments.subscription_id(), "sub_assessments"
+            ).sub_assessments.list(
+                has_sub_assessments.sub_assessment_resource_scope(),
+                has_sub_assessments.assessment_key(),
+            )
+        except AzureError as e:
+            self.logger.error(e)
+            sub_assessments = []
+        return sub_assessments
+
     def smash_has_assessments_sub_assessment(self, has_assessments):
+        has_assessments.sub_assessments = []
         try:
             has_assessments.sub_assessments = list(
                 self.get_sub_assessments(has_assessments)
@@ -328,8 +329,6 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         for task in tasks:
             event = {}
             event["task"] = task.serialize(keep_readonly=True)
-            event["meta"] = {}
-            event["meta"]["task"] = parse_resource_id(task.id)
 
             events.append(event)
 
@@ -355,8 +354,6 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                             assessment.metadata = metadata
 
                     event["assessment"] = assessment.serialize(keep_readonly=True)
-                    event["meta"]["assessment"] = parse_resource_id(assessment.id)
-                    used_assessment_ids.add(assessment.id)
 
                     sub_assessments = []
                     if hasattr(task, "sub_assessments") and task.sub_assessments:
@@ -394,8 +391,6 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                         assessment.metadata = metadata
 
                 event = {}
-                event["meta"] = {}
-                event["meta"]["assessment"] = parse_resource_id(assessment.id)
                 event["assessment"] = assessment.serialize(keep_readonly=True)
 
                 if (
@@ -406,9 +401,31 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                         sa.serialize(keep_readonly=True)
                         for sa in assessment.sub_assessments
                     ]
-                    assessment.sub_assesments = []
 
                 events.append(event)
+
+        for event in events:
+            event["meta"] = {}
+            if "task" in event:
+                event["meta"]["task"] = {}
+                event["meta"]["task"]["id"] = parse_resource_id(task.id)
+                if (
+                    task.security_task_parameters.additional_properties
+                    and task.security_task_parameters.additional_properties.get(
+                        "resourceId"
+                    )
+                ):
+                    event["meta"]["task"]["resourceId"] = parse_resource_id(
+                        task.security_task_parameters.additional_properties.get(
+                            "resourceId"
+                        )
+                    )
+            if "assessment" in event:
+                event["meta"]["assessment"] = {}
+                event["meta"]["assessment"]["id"] = parse_resource_id(assessment.id)
+                event["meta"]["assessment"]["resourceId"] = parse_resource_id(
+                    assessment.resource_details.id
+                )
 
         self.logger.info(
             f"subscription_id:{subscription_id}, used_assessment_ids:{len(used_assessment_ids)}, events:{len(events)}"
