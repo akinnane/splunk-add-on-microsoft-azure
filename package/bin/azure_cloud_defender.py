@@ -289,9 +289,14 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         sys.stdout.flush()
 
     def smash_has_assessments_sub_assessment(self, has_assessments):
-        has_assessments.sub_assessments = list(
-            self.get_sub_assessments(has_assessments)
-        )
+        try:
+            has_assessments.sub_assessments = list(
+                self.get_sub_assessments(has_assessments)
+            )
+        except AzureError as e:
+            self.logger.error(e)
+            # Not sure if this is a good idea
+            has_assessments.sub_assessments = [{"error": e}]
         return has_assessments
 
     def smash_events_subscription(self, subscription_id):
