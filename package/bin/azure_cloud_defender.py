@@ -404,36 +404,52 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
 
                 events.append(event)
 
-        for event in events:
-            event["meta"] = {}
-            if "task" in event:
-                event["meta"]["task"] = {}
-                event["meta"]["task"]["id"] = parse_resource_id(task.id)
-                if (
-                    task.security_task_parameters.additional_properties
-                    and task.security_task_parameters.additional_properties.get(
-                        "resourceId"
-                    )
-                ):
-                    event["meta"]["task"]["resourceId"] = parse_resource_id(
-                        task.security_task_parameters.additional_properties.get(
-                            "resourceId"
-                        )
-                    )
-            if "assessment" in event:
-                event["meta"]["assessment"] = {}
-                event["meta"]["assessment"]["id"] = parse_resource_id(assessment.id)
-                # print(dir(assessment.resource_details.additional_properties))
-                resource_id = assessment.resource_details.additional_properties.get('Id')
-                if resource_id:
-                    event["meta"]["assessment"]["resourceId"] = parse_resource_id(
-                    resource_id
-                )
+        events = self.add_metadata_to_events(events)
 
         self.logger.info(
             f"subscription_id:{subscription_id}, used_assessment_ids:{len(used_assessment_ids)}, events:{len(events)}"
         )
 
+        return events
+
+    def add_metadata_to_events(self, events):
+        for event in events:
+            event["meta"] = {}
+            if "task" in event:
+                event["meta"]["task"] = {}
+
+                task_id = event.get("task", {}).get("id", None)
+                if task_id:
+                    event["meta"]["task"]["id"] = parse_resource_id(task_id)
+
+                task_resource_id = (
+                    event.get("task", {})
+                    .get("securityTaskParameters", {})
+                    .get("resourceId", None)
+                )
+                if task_resource_id:
+                    event["meta"]["task"]["resource_id"] = parse_resource_id(
+                        task_resource_id
+                    )
+
+            if "assessment" in event:
+                event["meta"]["assessment"] = {}
+
+                assessment_id = event.get("assessment", {}).get("id", None)
+                if assessment_id:
+                    event["meta"]["assessment"]["id"] = parse_resource_id(assessment_id)
+
+                assessment_resource_id = (
+                    event.get("assessment", {})
+                    .get("properties", {})
+                    .get("resourceDetails", {})
+                    .get("Id", None)
+                )
+
+                if assessment_resource_id:
+                    event["meta"]["assessment"]["resourceId"] = parse_resource_id(
+                        assessment_resource_id
+                    )
         return events
 
     def smash_events_threaded(self):
