@@ -295,8 +295,6 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
             )
         except AzureError as e:
             self.logger.error(e)
-            # Not sure if this is a good idea
-            has_assessments.sub_assessments = [{"error": e}]
         return has_assessments
 
     def smash_events_subscription(self, subscription_id):
