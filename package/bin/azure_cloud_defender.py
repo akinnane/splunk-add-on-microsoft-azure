@@ -304,9 +304,10 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
             out["sub_assessment"] = sub.serialize(keep_readonly=True)
             out["meta"] = {}
             out["meta"]["sub_assessment"] = parse_resource_id(sub.id)
+            sub_assessments.append(out)
 
         self.logger.info(
-            f"subscription_id:{subscription_id}, used_assessment_ids:{len(used_assessment_ids)}, events:{len(events)}"
+            f"subscription_id:{subscription_id}, sub_assessments:{len(sub_assessments)} used_assessment_ids:{len(used_assessment_ids)}, events:{len(events)}"
         )
 
         return events
