@@ -34,8 +34,6 @@ def acd():
         "tenant_id": os.environ["azure_tenant_id"],
         "environment": "global",
         "collect_security_center_alerts": True,
-        "collect_security_center_tasks": True,
-        "security_task_sourcetype": "azure:securitycenter:task",
         "collect_security_assessments": True,
         "security_assessment_sourcetype": "azure:security:assessment",
     }
