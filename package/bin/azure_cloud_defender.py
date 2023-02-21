@@ -36,6 +36,7 @@ import azure.mgmt.security
 from msrestazure.tools import parse_resource_id
 from splunklib import modularinput as smi
 from splunktaucclib.modinput_wrapper import base_modinput as base_mi
+import copy
 
 
 class SecuritySubAssessment(SecuritySubAssessment):
@@ -261,9 +262,9 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
             self.get_assessments_metadata, subscription_id
         )
 
-        sub_assessments = self.executor.submit(
-            self.get_all_sub_assessments, subscription_id
-        )
+        # sub_assessments = self.executor.submit(
+        #     self.get_all_sub_assessments, subscription_id
+        # )
 
         assessments = assessments.result()
         assessments = list(
@@ -289,25 +290,38 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
             event["assessment"] = assessment.serialize(keep_readonly=True)
 
             if hasattr(assessment, "sub_assessments") and assessment.sub_assessments:
-                event["sub_assessments"] = [
+                # event["sub_assessments"] = [
+                #     sa.serialize(keep_readonly=True)
+                #     for sa in assessment.sub_assessments
+                # ]
+
+                sub_assessments = [
                     sa.serialize(keep_readonly=True)
                     for sa in assessment.sub_assessments
                 ]
+
+                for sub_assessment in sub_assessments:
+                    sub_event = copy.deepcopy(event)
+                    sub_event["sub_assessment"] = sub_assessment
+
+                    events.append(sub_event)
+                else:
+                    continue
 
             events.append(event)
 
         events = self.add_metadata_to_events(events)
 
-        sub_assessments = list(sub_assessments.result())
-        for sub in sub_assessments:
-            out = {}
-            out["sub_assessment"] = sub.serialize(keep_readonly=True)
-            out["meta"] = {}
-            out["meta"]["sub_assessment"] = parse_resource_id(sub.id)
-            events.append(out)
+        # sub_assessments = list(sub_assessments.result())
+        # for sub in sub_assessments:
+        #     out = {}
+        #     out["sub_assessment"] = sub.serialize(keep_readonly=True)
+        #     out["meta"] = {}
+        #     out["meta"]["sub_assessment"] = parse_resource_id(sub.id)
+        #     events.append(out)
 
         self.logger.info(
-            f"subscription_id:{subscription_id}, sub_assessments:{len(sub_assessments)} used_assessment_ids:{len(used_assessment_ids)}, events:{len(events)}"
+            f"subscription_id:{subscription_id}, used_assessment_ids:{len(used_assessment_ids)}, events:{len(events)}"
         )
 
         return events
@@ -332,6 +346,27 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                 if assessment_resource_id:
                     event["meta"]["assessment"]["resourceId"] = parse_resource_id(
                         assessment_resource_id
+                    )
+
+            if "sub_assessment" in event:
+                event["meta"]["sub_assessment"] = {}
+
+                sub_assessment_id = event.get("sub_assessment", {}).get("id", None)
+                if sub_assessment_id:
+                    event["meta"]["sub_assessment"]["id"] = parse_resource_id(
+                        sub_assessment_id
+                    )
+
+                sub_assessment_resource_id = (
+                    event.get("sub_assessment", {})
+                    .get("properties", {})
+                    .get("resourceDetails", {})
+                    .get("id", None)
+                )
+
+                if sub_assessment_resource_id:
+                    event["meta"]["assessment"]["resourceId"] = parse_resource_id(
+                        sub_assessment_resource_id
                     )
         return events
 
