@@ -204,6 +204,13 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         ).assessments.list(f"/subscriptions/{subscription_id}")
         return assessments
 
+    def get_all_sub_assessments(self, subscription_id):
+        """Get security center assessments"""
+        assessments = self.security_center(
+            subscription_id, "sub_assessments"
+        ).sub_assessments.list_all(f"/subscriptions/{subscription_id}")
+        return assessments
+
     def get_assessments_metadata(self, subscription_id):
         assessment_metadata = self.security_center(
             subscription_id, "assessment_metadata"
@@ -254,6 +261,10 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
             self.get_assessments_metadata, subscription_id
         )
 
+        sub_assessments = self.executor.submit(
+            self.get_all_sub_assessments, subscription_id
+        )
+
         assessments = assessments.result()
         assessments = list(
             self.executor.map(self.smash_has_assessments_sub_assessment, assessments)
@@ -277,10 +288,7 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
             event = {}
             event["assessment"] = assessment.serialize(keep_readonly=True)
 
-            if (
-                hasattr(assessment, "sub_assessments")
-                and assessment.sub_assessments
-                ):
+            if hasattr(assessment, "sub_assessments") and assessment.sub_assessments:
                 event["sub_assessments"] = [
                     sa.serialize(keep_readonly=True)
                     for sa in assessment.sub_assessments
@@ -289,6 +297,13 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
             events.append(event)
 
         events = self.add_metadata_to_events(events)
+
+        sub_assessments = list(sub_assessments.result())
+        for sub in sub_assessments:
+            out = {}
+            out["sub_assessment"] = sub.serialize(keep_readonly=True)
+            out["meta"] = {}
+            out["meta"]["sub_assessment"] = parse_resource_id(sub.id)
 
         self.logger.info(
             f"subscription_id:{subscription_id}, used_assessment_ids:{len(used_assessment_ids)}, events:{len(events)}"
