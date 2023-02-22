@@ -307,12 +307,12 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
             )
             if assessment_resource_id:
                 event.setdefault("meta", {}).setdefault("assessment", {}).update(
-                    {"resourceId": parse_resource_id(assessment_resource_id)}
+                    {"resource_id": parse_resource_id(assessment_resource_id)}
                 )
 
             sub_assessment_id = event.get("sub_assessment", {}).get("id", None)
             if sub_assessment_id:
-                event.setdefault("meta", {}).setdefault("assessment", {}).update(
+                event.setdefault("meta", {}).setdefault("sub_assessment", {}).update(
                     {"id": parse_resource_id(sub_assessment_id)}
                 )
 
@@ -323,8 +323,8 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
                 .get("id", None)
             )
             if sub_assessment_resource_id:
-                event.setdefault("meta", {}).setdefault("assessment", {}).update(
-                    {"id": parse_resource_id(sub_assessment_resource_id)}
+                event.setdefault("meta", {}).setdefault("sub_assessment", {}).update(
+                    {"resource_id": parse_resource_id(sub_assessment_resource_id)}
                 )
 
         return events
