@@ -39,14 +39,6 @@ from splunktaucclib.modinput_wrapper import base_modinput as base_mi
 import copy
 
 
-class SecuritySubAssessment(SecuritySubAssessment):
-    def __lt__(self, other):
-        return self.id.cmp(other.id)
-
-    def __hash__(self):
-        return hash(self.id)
-
-
 class SecurityAssessmentResponse(SecurityAssessmentResponse):
     subassessment_resource_scope_regex = re.compile(
         "(?P<scope>.*?)/providers/Microsoft.Security/assessments/(?P<assessment_name>[^/]+)/subAssessments"
@@ -74,20 +66,6 @@ class SecurityAssessmentResponse(SecurityAssessmentResponse):
         return self.resource_details.additional_properties.get("Id", "NORESOURCEID")
 
 
-sub_assessments_attribute_map = {
-    # "sub_assessments": {
-    #     "key": "sub_assessments",
-    #     "type": "[SecuritySubAssessment]",
-    # },
-    "metadata": {
-        "key": "properties.metadata",
-        "type": "SecurityAssessmentMetadataResponse",
-    },
-}
-
-
-SecurityAssessmentResponse._attribute_map.update(sub_assessments_attribute_map)
-
 azure.mgmt.security.v2019_01_01_preview.models.SecuritySubAssessment = (
     SecuritySubAssessment
 )
@@ -101,7 +79,6 @@ azure.mgmt.security.v2019_01_01_preview.models._models_py3.AdditionalData.enable
 azure.mgmt.security.v2019_01_01_preview.models._models_py3.AzureResourceDetails.enable_additional_properties_sending()
 azure.mgmt.security.v2019_01_01_preview.models._models_py3.SubAssessmentStatus.enable_additional_properties_sending()
 azure.mgmt.security.v2019_01_01_preview.models.SecuritySubAssessment.enable_additional_properties_sending()
-
 azure.mgmt.security.v2021_06_01.models.ResourceDetails.enable_additional_properties_sending()
 
 bin_dir = os.path.basename(__file__)
@@ -160,7 +137,6 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
 
         global_account = self.get_arg("azure_app_account")
         tenant_id = self.get_arg("tenant_id")
-        # environment = self.get_arg("environment")
 
         credentials = ClientSecretCredential(
             tenant_id,
@@ -172,10 +148,8 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         return credentials
 
     def security_center(self, subscription_id, caller):
-        sub = self._security_center.get(subscription_id, {})
-        if not sub:
-            self._security_center[subscription_id] = sub
-        sc = sub.get(caller, None)
+        sc = self._security_center.setdefault(subscription_id, {}).get(caller, None)
+
         if not sc:
             sc = SecurityCenter(self.get_azure_creds(), subscription_id)
             self._security_center[subscription_id].update({caller: sc})
@@ -212,7 +186,7 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         ).sub_assessments.list_all(f"/subscriptions/{subscription_id}")
         return assessments
 
-    def get_assessments_metadata(self, subscription_id):
+    def get_assessment_metadata(self, subscription_id):
         assessment_metadata = self.security_center(
             subscription_id, "assessment_metadata"
         ).assessments_metadata.list()
@@ -255,16 +229,12 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
             self.logger.error(e)
         return has_assessments
 
-    def smash_events_subscription(self, subscription_id):
+    def get_subscription_events(self, subscription_id):
         assessments = self.executor.submit(self.get_assessments, subscription_id)
 
         assessment_metadata = self.executor.submit(
-            self.get_assessments_metadata, subscription_id
+            self.get_assessment_metadata, subscription_id
         )
-
-        # sub_assessments = self.executor.submit(
-        #     self.get_all_sub_assessments, subscription_id
-        # )
 
         assessments = assessments.result()
         assessments = list(
@@ -277,24 +247,29 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
             f"smash_events_subscriptions():{subscription_id} len(assessments)={len(assessments)} len(assessment_metadata)={len(assessment_metadata)}"
         )
 
-        used_assessment_ids = set()
-
         events = []
 
         for assessment in assessments:
+            event = {}
+
             for metadata in assessment_metadata:
                 if metadata.name in assessment.id:
-                    assessment.metadata = metadata
+                    if "assessment_metadata" in event:
+                        event.setdefault("meta", {}).setdefault("errors", {}).update(
+                            {
+                                "assessment all ready has metadata": metadata.serialize(
+                                    keep_readonly=True
+                                )
+                            }
+                        )
 
-            event = {}
+                    event["assessment_metadata"] = metadata.serialize(
+                        keep_readonly=True
+                    )
+
             event["assessment"] = assessment.serialize(keep_readonly=True)
 
             if hasattr(assessment, "sub_assessments") and assessment.sub_assessments:
-                # event["sub_assessments"] = [
-                #     sa.serialize(keep_readonly=True)
-                #     for sa in assessment.sub_assessments
-                # ]
-
                 sub_assessments = [
                     sa.serialize(keep_readonly=True)
                     for sa in assessment.sub_assessments
@@ -312,72 +287,56 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
 
         events = self.add_metadata_to_events(events)
 
-        # sub_assessments = list(sub_assessments.result())
-        # for sub in sub_assessments:
-        #     out = {}
-        #     out["sub_assessment"] = sub.serialize(keep_readonly=True)
-        #     out["meta"] = {}
-        #     out["meta"]["sub_assessment"] = parse_resource_id(sub.id)
-        #     events.append(out)
-
-        self.logger.info(
-            f"subscription_id:{subscription_id}, used_assessment_ids:{len(used_assessment_ids)}, events:{len(events)}"
-        )
+        self.logger.info(f"subscription_id:{subscription_id}, events:{len(events)}")
 
         return events
 
     def add_metadata_to_events(self, events):
         for event in events:
-            event["meta"] = {}
-            if "assessment" in event:
-                event["meta"]["assessment"] = {}
-
-                assessment_id = event.get("assessment", {}).get("id", None)
-                if assessment_id:
-                    event["meta"]["assessment"]["id"] = parse_resource_id(assessment_id)
-
-                assessment_resource_id = (
-                    event.get("assessment", {})
-                    .get("properties", {})
-                    .get("resourceDetails", {})
-                    .get("Id", None)
+            assessment_id = event.get("assessment", {}).get("id", None)
+            if assessment_id:
+                event.setdefault("meta", {}).setdefault("assessment", {}).update(
+                    {"id": parse_resource_id(assessment_id)}
                 )
 
-                if assessment_resource_id:
-                    event["meta"]["assessment"]["resourceId"] = parse_resource_id(
-                        assessment_resource_id
-                    )
-
-            if "sub_assessment" in event:
-                event["meta"]["sub_assessment"] = {}
-
-                sub_assessment_id = event.get("sub_assessment", {}).get("id", None)
-                if sub_assessment_id:
-                    event["meta"]["sub_assessment"]["id"] = parse_resource_id(
-                        sub_assessment_id
-                    )
-
-                sub_assessment_resource_id = (
-                    event.get("sub_assessment", {})
-                    .get("properties", {})
-                    .get("resourceDetails", {})
-                    .get("id", None)
+            assessment_resource_id = (
+                event.get("assessment", {})
+                .get("properties", {})
+                .get("resourceDetails", {})
+                .get("Id", None)
+            )
+            if assessment_resource_id:
+                event.setdefault("meta", {}).setdefault("assessment", {}).update(
+                    {"resourceId": parse_resource_id(assessment_resource_id)}
                 )
 
-                if sub_assessment_resource_id:
-                    event["meta"]["assessment"]["resourceId"] = parse_resource_id(
-                        sub_assessment_resource_id
-                    )
+            sub_assessment_id = event.get("sub_assessment", {}).get("id", None)
+            if sub_assessment_id:
+                event.setdefault("meta", {}).setdefault("assessment", {}).update(
+                    {"id": parse_resource_id(sub_assessment_id)}
+                )
+
+            sub_assessment_resource_id = (
+                event.get("sub_assessment", {})
+                .get("properties", {})
+                .get("resourceDetails", {})
+                .get("id", None)
+            )
+            if sub_assessment_resource_id:
+                event.setdefault("meta", {}).setdefault("assessment", {}).update(
+                    {"id": parse_resource_id(sub_assessment_resource_id)}
+                )
+
         return events
 
-    def smash_events_threaded(self):
+    def get_events_threaded(self):
         subscriptions = self.get_subscriptions()
 
         results = []
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=5)
         for subscription_id in self.subscription_ids(subscriptions):
             results.append(
-                executor.submit(self.smash_events_subscription, subscription_id)
+                executor.submit(self.get_subscription_events, subscription_id)
             )
 
         metadata = {
@@ -387,6 +346,8 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         }
 
         count = 0
+
+        events = []
 
         for r in concurrent.futures.as_completed(results):
             r = r.result()
@@ -401,14 +362,16 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
 
                 self.event_writer.write_event(event1)
                 count += 1
+                events.append(event)
 
         sys.stdout.flush()
         self.logger.info(f"Finished writing events: {count}")
+        return events
 
     def collect_events(self, event_writer):
         self.event_writer = event_writer
         t1 = time.perf_counter()
-        events = self.smash_events_threaded()
+        events = self.get_events_threaded()
         t2 = time.perf_counter()
         self.logger.info(
             f"time: smash_events_threaded:{t2-t1}"  # process_smashed_events:{t3-t2}, t3-t4:{t4-t3}, write_events:{t5-t3}"

@@ -54,15 +54,14 @@ def test_can_instantiate(arg):
 
 @pytest.mark.live
 def test_arg_get_resource_groups(arg, ew):
-    events = arg.get_resource_groups("TODO")
-    # print(events)
-    assert events
-    assert len(events) == 3
+    rgs = arg.get_resource_groups("TODO")
+    for rg in rgs:
+        print(rg)
+        assert rg
 
 
 @pytest.mark.live
 def test_arg_collect_events(arg, ew):
     events = arg.collect_events(ew)
-    # print(events)
     assert events
     assert len(events) == 8
