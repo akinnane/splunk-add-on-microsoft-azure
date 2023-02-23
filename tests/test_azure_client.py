@@ -15,6 +15,8 @@ def test_get_azure_credentials(az):
 def test_get_subscriptions(az):
     subscriptions = list(az.get_subscriptions())
     assert subscriptions
+    for subscription in subscriptions:
+        assert subscription.tenant_id
 
 
 @pytest.mark.live
