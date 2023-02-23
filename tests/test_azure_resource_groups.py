@@ -1,4 +1,3 @@
-import json
 import os
 
 import azure_resource_group

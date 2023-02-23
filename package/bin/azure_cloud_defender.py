@@ -33,7 +33,6 @@ from azure.mgmt.security.v2021_06_01.models import SecurityAssessmentResponse
 from msrestazure.tools import parse_resource_id
 from splunklib import modularinput as smi
 from splunktaucclib.modinput_wrapper import base_modinput as base_mi
-import azure.mgmt.security as az_security
 import azure
 
 from azure_client import AzureClient

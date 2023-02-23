@@ -1,11 +1,8 @@
-import json
 import os
 from pprint import PrettyPrinter
 
-import azure
 import azure_cloud_defender
 import pytest
-from azure.mgmt.security.v2019_01_01_preview.models import SecuritySubAssessment
 from azure.mgmt.security.v2021_06_01.models import SecurityAssessmentResponse
 
 PP = PrettyPrinter(indent=4, width=300, compact=False).pprint
