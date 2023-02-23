@@ -16,10 +16,10 @@ def acd(ew):
     acd = azure_cloud_defender.ModInputAzureCloudDefender()
     azure_app_account = {
         "azure_app_account": {
-            "username": os.environ["azure_client_id"],
-            "password": os.environ["azure_client_secret"],
+            "username": os.environ.get("azure_client_id"),
+            "password": os.environ.get("azure_client_secret"),
         },
-        "tenant_id": os.environ["azure_tenant_id"],
+        "tenant_id": os.environ.get("azure_tenant_id"),
         "environment": "global",
         "collect_security_center_alerts": True,
         "collect_security_assessments": True,

@@ -18,8 +18,15 @@ jobs:
           cache: 'pip'
       - run: pip install -r tests/requirements.txt splunk-add-on-ucc-framework splunk-packaging-toolkit
 
-      - name: Run tests
+      - name: Run offline tests
         run: cd tests; pytest
+
+      - name: Run live tests
+        env:
+          azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure_client_secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+        run: cd tests; pytest -m live
 
       - name: Package
         run: ucc-gen build && slim package output/TA-MS-AAD && ls -la *.gz && sha1sum *.gz
