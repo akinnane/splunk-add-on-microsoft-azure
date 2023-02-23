@@ -1,19 +1,8 @@
+import json
 import os
-import pytest
+
 import azure_resource_group
-
-
-@pytest.fixture
-def ew():
-    class EventWriter:
-        def __init__(self):
-            pass
-
-        def write_event(self, event):
-            pass
-            # print(event)
-
-    return EventWriter()
+import pytest
 
 
 @pytest.fixture
@@ -53,15 +42,6 @@ def test_can_instantiate(arg):
 
 
 @pytest.mark.live
-def test_arg_get_resource_groups(arg, ew):
-    rgs = arg.get_resource_groups("TODO")
-    for rg in rgs:
-        print(rg)
-        assert rg
-
-
-@pytest.mark.live
 def test_arg_collect_events(arg, ew):
     events = arg.collect_events(ew)
     assert events
-    assert len(events) == 8

@@ -16,34 +16,36 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 """
+import json
 import os
 import sys
-import time
-import datetime
-import json
-import import_declare_test
+from datetime import datetime
+
+from azure.mgmt.resource.resources.v2022_09_01.models import (
+    ResourceGroup,
+    ResourceGroupProperties,
+)
 from splunklib import modularinput as smi
-import traceback
-import requests
-from splunklib import modularinput as smi
-from solnlib import conf_manager
-from solnlib import log
-from solnlib.modular_input import checkpointer
 from splunktaucclib.modinput_wrapper import base_modinput as base_mi
-import requests
-import ta_azure_utils.auth as azauth
-import ta_azure_utils.utils as azutils
+
+import import_declare_test
+from azure_client import AzureClient
 
 bin_dir = os.path.basename(__file__)
 
 
-class ModInputazure_resource_group(base_mi.BaseModInput):
+ResourceGroup.enable_additional_properties_sending()
+ResourceGroupProperties.enable_additional_properties_sending()
+
+
+class ModInputazure_resource_group(AzureClient, base_mi.BaseModInput):
     def __init__(self):
         use_single_instance = False
         super(ModInputazure_resource_group, self).__init__(
             "ta_ms_aad", "azure_resource_group", use_single_instance
         )
         self.global_checkbox_fields = None
+        self.ssphp_run = datetime.now().timestamp()
         self.session = None
 
     def get_scheme(self):
@@ -101,40 +103,8 @@ class ModInputazure_resource_group(base_mi.BaseModInput):
     def validate_input(helper, definition):
         pass
 
-    def get_session(self):
-        """Create an Azure session"""
-        self.logger.debug("Getting Azure session")
-        if self.session:
-            return self.session
-
-        global_account = self.get_arg("azure_app_account")
-        tenant_id = self.get_arg("tenant_id")
-        environment = self.get_arg("environment")
-
-        session = azauth.get_mgmt_session(
-            global_account["username"],
-            global_account["password"],
-            tenant_id,
-            environment,
-            self,
-        )
-
-        if not session:
-            raise RuntimeError("No Azure Session")
-
-        self.session = session
-
-        return session
-
-    def management_base_url(self):
-        environment = self.get_arg("environment")
-        return azutils.get_environment_mgmt(environment)
-
     def tenant_id(self):
         self.get_arg("tenant_id")
-
-    def subscripiton_url(self):
-        return f"{self.management_base_url()}/subscriptions?api-version=2020-01-01"
 
     def subscription_metadata(self):
         return {
@@ -143,41 +113,13 @@ class ModInputazure_resource_group(base_mi.BaseModInput):
             "source": f"{self.input_type}:tenant_id:{self.tenant_id()}",
         }
 
-    def subscription_ids(self, subscripitons):
-        return [subscripiton["subscriptionId"] for subscripiton in subscripitons]
-
-    def get_subscriptions(self):
-        """Get all Azure subscriptions"""
-        url = self.subscripiton_url()
-        subscriptions = self.get_items(url)
-        self.logger.debug("subscriptions: %s", len(subscriptions))
-        return subscriptions
-
-    def get_items(self, url):
-        """Get all items from an endpoint"""
-        response = azutils.get_items_batch_session(
-            helper=self, url=url, session=self.get_session()
-        )
-
-        items = None if response is None else response["value"]
-
-        events = []
-        while items:
-            events += items
-
-            response = azutils.handle_nextLink(
-                helper=self, response=response, session=self.get_session()
-            )
-
-            items = None if response is None else response["value"]
-
-        return events
-
     def write_events(self, event_writer, collection, metadata):
         """Write a collection of events using the provided eventwriter and metadata"""
         for item in collection:
+            data = item.serialize(keep_readonly=True)
+            data["SSPHP_RUN"] = self.ssphp_run
             event = self.new_event(
-                data=json.dumps(item),
+                data=json.dumps(data),
                 source=metadata["source"],
                 index=metadata["index"],
                 sourcetype=metadata["sourcetype"],
@@ -207,16 +149,6 @@ class ModInputazure_resource_group(base_mi.BaseModInput):
             "index": self.get_output_index(),
             "source": f"{self.input_type}:subscription:{subscription_id}",
         }
-
-    def resource_groups_url(self, subscription_id):
-        return f"{self.management_base_url()}/subscriptions/{subscription_id}/resourcegroups?api-version=2021-04-01"
-
-    def get_resource_groups(self, subscription_id):
-        """Get all Azure subscriptions"""
-        url = self.resource_groups_url(subscription_id)
-        resource_groups = self.get_items(url)
-        self.logger.debug("resource_groups: %s", len(resource_groups))
-        return resource_groups
 
     def get_account_fields(self):
         account_fields = []

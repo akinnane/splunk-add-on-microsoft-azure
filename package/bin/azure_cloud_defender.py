@@ -17,6 +17,7 @@ limitations under the License.
 
 """
 import concurrent.futures
+import copy
 import json
 import os
 import re
@@ -24,19 +25,17 @@ import sys
 import time
 from datetime import datetime
 
-# import azure
-import import_declare_test
-from azure.core.exceptions import AzureError
-from azure.identity import ClientSecretCredential
-from azure.mgmt.security import SecurityCenter
-from azure.mgmt.security.v2021_06_01.models import SecurityAssessmentResponse
-from azure.mgmt.security.v2019_01_01_preview.models import SecuritySubAssessment
-from azure.mgmt.subscription import SubscriptionClient
 import azure.mgmt.security
+from azure.core.exceptions import AzureError
+from azure.mgmt.security.v2019_01_01_preview.models import SecuritySubAssessment
+from azure.mgmt.security.v2021_06_01.models import SecurityAssessmentResponse
 from msrestazure.tools import parse_resource_id
 from splunklib import modularinput as smi
 from splunktaucclib.modinput_wrapper import base_modinput as base_mi
-import copy
+
+# import azure
+import import_declare_test
+from azure_client import AzureClient
 
 
 class SecurityAssessmentResponse(SecurityAssessmentResponse):
@@ -84,7 +83,7 @@ azure.mgmt.security.v2021_06_01.models.ResourceDetails.enable_additional_propert
 bin_dir = os.path.basename(__file__)
 
 
-class ModInputAzureCloudDefender(base_mi.BaseModInput):
+class ModInputAzureCloudDefender(AzureClient, base_mi.BaseModInput):
     def __init__(self):
         use_single_instance = False
         super().__init__("ta_ms_aad", "azure_cloud_defender", use_single_instance)
@@ -92,7 +91,6 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
         self.session = None
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=40)
         self.ssphp_run = datetime.now().timestamp()
-        self._security_center = {}
 
     def get_scheme(self):
         """overloaded splunklib modularinput method"""
@@ -130,67 +128,6 @@ class ModInputAzureCloudDefender(base_mi.BaseModInput):
 
     def validate_input(self, definition):
         pass
-
-    def get_azure_creds(self):
-        """Create an Azure session"""
-        self.logger.debug("Getting Azure CLIENT")
-
-        global_account = self.get_arg("azure_app_account")
-        tenant_id = self.get_arg("tenant_id")
-
-        credentials = ClientSecretCredential(
-            tenant_id,
-            global_account["username"],  # client ID
-            client_secret=global_account["password"],
-            # No provision for .gov azure
-        )
-
-        return credentials
-
-    def security_center(self, subscription_id, caller):
-        sc = self._security_center.setdefault(subscription_id, {}).get(caller, None)
-
-        if not sc:
-            sc = SecurityCenter(self.get_azure_creds(), subscription_id)
-            self._security_center[subscription_id].update({caller: sc})
-
-        return sc
-
-    def subscription_metadata(self):
-        return {
-            "sourcetype": self.get_arg("source_type"),
-            "index": self.get_output_index(),
-            "source": f"{self.input_type}:tenant_id:{self.tenant_id()}",
-        }
-
-    def subscription_ids(self, subscripitons):
-        return [subscripiton.subscription_id for subscripiton in subscripitons]
-
-    def get_subscriptions(self):
-        """Get all Azure subscriptions"""
-        creds = self.get_azure_creds()
-        subscriptions = SubscriptionClient(creds).subscriptions.list()
-        return subscriptions
-
-    def get_assessments(self, subscription_id):
-        """Get security center assessments"""
-        assessments = self.security_center(
-            subscription_id, "assessments"
-        ).assessments.list(f"/subscriptions/{subscription_id}")
-        return assessments
-
-    def get_all_sub_assessments(self, subscription_id):
-        """Get security center assessments"""
-        assessments = self.security_center(
-            subscription_id, "sub_assessments"
-        ).sub_assessments.list_all(f"/subscriptions/{subscription_id}")
-        return assessments
-
-    def get_assessment_metadata(self, subscription_id):
-        assessment_metadata = self.security_center(
-            subscription_id, "assessment_metadata"
-        ).assessments_metadata.list()
-        return assessment_metadata
 
     def write_events(self, event_writer, collection, metadata):
         """Write a collection of events using the provided eventwriter and metadata"""

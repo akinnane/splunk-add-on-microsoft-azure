@@ -1,10 +1,18 @@
+import json
 import os
 import pathlib
 import sys
 
+import pytest
+
+# Add bin directory for imports
+bindir = os.getcwd() + "/../package/bin/"
+sys.path.insert(1, bindir)
+
+from azure_client import AzureClient
+
 
 def pytest_sessionstart():
-
     # Build fake Splunk env
     pathlib.Path("SPLUNK_HOME").mkdir(parents=True, exist_ok=True)
 
@@ -19,6 +27,46 @@ def pytest_sessionstart():
 
     pathlib.Path("SPLUNK_HOME/var/log/splunk").mkdir(parents=True, exist_ok=True)
 
-    # Add bin directory for imports
-    bindir = os.getcwd() + "/../package/bin/"
-    sys.path.insert(1, bindir)
+
+@pytest.fixture()
+def azure_app_account():
+    azure_app_account = {
+        "azure_app_account": {
+            "username": os.environ["azure_client_id"],
+            "password": os.environ["azure_client_secret"],
+        },
+        "tenant_id": os.environ["azure_tenant_id"],
+    }
+    return azure_app_account
+
+
+@pytest.fixture()
+def az(azure_app_account):
+    az = AzureClient()
+    az.input_stanzas = {}
+    az.input_stanzas = azure_app_account
+
+    def get_arg(self, x):
+        return self.input_stanzas.get(x, None)
+
+    az.get_arg = get_arg.__get__(az)
+    return az
+
+
+@pytest.fixture
+def sub_ids(az):
+    subscriptions = az.get_subscriptions()
+    return az.subscription_ids(subscriptions)
+
+
+@pytest.fixture
+def ew():
+    class EventWriter:
+        def __init__(self):
+            pass
+
+        def write_event(self, event):
+            data = json.loads(event["data"])
+            assert "SSPHP_RUN" in data
+
+    return EventWriter()

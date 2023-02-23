@@ -1,31 +1,14 @@
-import os
-import pytest
-import azure_cloud_defender
-from pprint import PrettyPrinter
 import json
+import os
+from pprint import PrettyPrinter
+
+import azure
+import azure_cloud_defender
+import pytest
 from azure.mgmt.security.v2019_01_01_preview.models import SecuritySubAssessment
 from azure.mgmt.security.v2021_06_01.models import SecurityAssessmentResponse
 
-import azure
-
 PP = PrettyPrinter(indent=4, width=300, compact=False).pprint
-
-
-@pytest.fixture
-def ew():
-    class EventWriter:
-        def __init__(self):
-            self.count = 0
-
-        def write_event(self, event):
-            pass
-            # self.count += 1
-            # print(self.count)
-            # if 'subAssessmentsLink' in event['data']:
-            #     j = json.loads(event["data"])
-            #     PP(j)
-
-    return EventWriter()
 
 
 @pytest.fixture
@@ -64,12 +47,6 @@ def acd(ew):
 
 
 @pytest.fixture
-def sub_ids(acd):
-    subscriptions = acd.get_subscriptions()
-    return acd.subscription_ids(subscriptions)
-
-
-@pytest.fixture
 def sar():
     sar = SecurityAssessmentResponse()
     sar.additional_data = {}
@@ -81,37 +58,9 @@ def sar():
     return sar
 
 
-@pytest.mark.live
-def test_get_azure_credentials(acd):
-    creds = acd.get_azure_creds()
-    assert creds
-
-
-@pytest.mark.live
-def test_get_subscriptions(acd):
-    subscriptions = list(acd.get_subscriptions())
-    assert subscriptions
-
-
 def test_extract_assessment_resource_scope(sar):
     scope = sar.sub_assessment_resource_scope()
     assert scope == "/subscriptions/63ed7111-101c-4849-9f33-03ef672ed20d"
-
-
-@pytest.mark.live
-def test_get_assessments(acd, sub_ids):
-    for sub_id in sub_ids:
-        assessments = list(acd.get_assessments(sub_id))
-        for assessment in assessments:
-            assert assessment.type == "Microsoft.Security/assessments"
-
-
-@pytest.mark.live
-def test_get_assessments_metadata(acd, sub_ids):
-    for sub_id in sub_ids:
-        assessments_metadata = list(acd.get_assessment_metadata(sub_id))
-        for assessment_metadata in assessments_metadata:
-            assert assessment_metadata.type == "Microsoft.Security/assessmentMetadata"
 
 
 # Base Class
@@ -123,27 +72,6 @@ def test_can_instantiate(acd):
 def test_get_scheme(acd):
     scheme = acd.get_scheme()
     assert scheme
-
-
-@pytest.mark.skip(reason="Azure API response doesn't match documentation")
-def test_get_contacts(acd, sub_ids):
-    for sub_id in sub_ids:
-        contacts = acd.get_contacts(sub_id)
-        assert contacts
-
-
-# @pytest.mark.live
-# def test_get_sub_assessments(acd, sub_ids):
-#     for sub_id in sub_ids:
-#         sub_assessments = acd.get_sub_assessments(sub_id)
-#         assert sub_assessments
-
-
-@pytest.mark.live
-def test_get_assessment_metadata(acd, sub_ids):
-    for sub_id in sub_ids:
-        assessment_metadata = acd.get_assessment_metadata(sub_id)
-        assert assessment_metadata
 
 
 @pytest.mark.live

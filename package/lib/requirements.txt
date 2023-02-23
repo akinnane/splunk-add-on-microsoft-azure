@@ -4,5 +4,6 @@ six>=1.16.0
 azure-identity
 azure-mgmt-security
 azure-mgmt-subscription
+azure-mgmt-resource
 msrestazure
 
