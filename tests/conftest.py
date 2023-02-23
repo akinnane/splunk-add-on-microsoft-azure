@@ -32,10 +32,10 @@ def pytest_sessionstart():
 def azure_app_account():
     azure_app_account = {
         "azure_app_account": {
-            "username": os.environ["azure_client_id"],
-            "password": os.environ["azure_client_secret"],
+            "username": os.environ.get('azure_client_id'),
+            "password": os.environ.get('azure_client_secret'),
         },
-        "tenant_id": os.environ["azure_tenant_id"],
+        "tenant_id": os.environ.get("azure_tenant_id"),
     }
     return azure_app_account
 
