@@ -1,3 +1,4 @@
+---
 name: Python package
 
 on: [push]
@@ -12,14 +13,10 @@ jobs:
       - name: Set up Python 3.x
         uses: actions/setup-python@v4
         with:
-          # Semantic version range syntax or exact version of a Python version
-          python-version: '3.9.x'
-	  
-          # Optional - x64 or x86 architecture, defaults to x64
+          -version: '3.9.x'
           architecture: 'x64'
-	  cache: 'pip'
+          cache: 'pip'
       - run: pip install -r tests/requirements.txt splunk-add-on-ucc-framework splunk-packaging-toolkit
-	  
 
       - name: Run tests
         run: cd tests; pytest
