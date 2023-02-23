@@ -13,7 +13,7 @@ jobs:
       - name: Set up Python 3.x
         uses: actions/setup-python@v4
         with:
-          -version: '3.9.x'
+          python-version: '3.9.x'
           architecture: 'x64'
           cache: 'pip'
       - run: pip install -r tests/requirements.txt splunk-add-on-ucc-framework splunk-packaging-toolkit
