@@ -24,17 +24,18 @@ import re
 import sys
 import time
 from datetime import datetime
+import import_declare_test
 
-import azure.mgmt.security
+
 from azure.core.exceptions import AzureError
 from azure.mgmt.security.v2019_01_01_preview.models import SecuritySubAssessment
 from azure.mgmt.security.v2021_06_01.models import SecurityAssessmentResponse
 from msrestazure.tools import parse_resource_id
 from splunklib import modularinput as smi
 from splunktaucclib.modinput_wrapper import base_modinput as base_mi
+import azure.mgmt.security as az_security
+import azure
 
-# import azure
-import import_declare_test
 from azure_client import AzureClient
 
 

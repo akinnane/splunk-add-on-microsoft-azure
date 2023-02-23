@@ -1,5 +1,5 @@
 # encoding = utf-8
-'''
+"""
 
 Copyright 2020 Splunk Inc.
 
@@ -15,11 +15,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-'''
+"""
 import os
 import sys
 
-import warnings
-warnings.filterwarnings("ignore")
-
-sys.path.insert(0, os.path.sep.join([os.path.dirname(os.path.realpath(os.path.dirname(__file__))), 'lib']))
+sys.path.insert(
+    0,
+    os.path.sep.join(
+        [os.path.dirname(os.path.realpath(os.path.dirname(__file__))), "lib"]
+    ),
+)

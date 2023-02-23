@@ -20,6 +20,7 @@ import json
 import os
 import sys
 from datetime import datetime
+import import_declare_test
 
 from azure.mgmt.resource.resources.v2022_09_01.models import (
     ResourceGroup,
@@ -28,7 +29,7 @@ from azure.mgmt.resource.resources.v2022_09_01.models import (
 from splunklib import modularinput as smi
 from splunktaucclib.modinput_wrapper import base_modinput as base_mi
 
-import import_declare_test
+
 from azure_client import AzureClient
 
 bin_dir = os.path.basename(__file__)

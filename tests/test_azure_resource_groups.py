@@ -41,6 +41,11 @@ def test_can_instantiate(arg):
     assert arg
 
 
+def test_get_scheme(arg):
+    scheme = arg.get_scheme()
+    assert scheme
+
+
 @pytest.mark.live
 def test_arg_collect_events(arg, ew):
     events = arg.collect_events(ew)
