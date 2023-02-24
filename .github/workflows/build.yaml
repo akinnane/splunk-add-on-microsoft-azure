@@ -52,4 +52,4 @@ jobs:
           author_name: GitHub Actions
           author_email: 41898282+github-actions[bot]@users.noreply.github.com
           message: Update deployment zip
-          add: '*.zip'
+          add: '*.gz'
