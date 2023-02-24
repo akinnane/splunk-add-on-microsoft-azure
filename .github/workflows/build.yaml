@@ -16,7 +16,10 @@ jobs:
           python-version: '3.7.x'
           architecture: 'x64'
           cache: 'pip'
-      - run: pip install -r tests/requirements.txt splunk-add-on-ucc-framework splunk-packaging-toolkit
+      - run: pip install -U setuptools && pip install -r tests/requirements.txt splunk-add-on-ucc-framework splunk-packaging-toolkit
+
+      - name: Pip audit
+        run: pip-audit -S
 
       - name: ruff
         run: ruff package/bin/*.py tests/*.py --ignore=F401,E501,E402
@@ -30,9 +33,6 @@ jobs:
           azure_client_secret: ${{ secrets.AZURE_CLIENT_SECRET }}
           azure_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
         run: cd tests; pytest -m live
-
-      - name: Pip audit
-        run: pip-audit -S
 
       - name: bandit
         run: bandit package/bin/*.py
