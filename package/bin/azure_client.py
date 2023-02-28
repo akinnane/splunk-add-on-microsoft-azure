@@ -70,3 +70,7 @@ class AzureClient:
             subscription_id, "assessment_metadata"
         ).assessments_metadata.list()
         return assessment_metadata
+
+    def list_alerts(self, subscription_id):
+        alerts = self.security_center(subscription_id, "alerts").alerts.list()
+        return alerts

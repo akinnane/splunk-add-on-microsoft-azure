@@ -9,6 +9,8 @@ import pytest
 bindir = os.getcwd() + "/../package/bin/"
 sys.path.insert(1, bindir)
 
+import azure
+
 from azure_client import AzureClient
 
 

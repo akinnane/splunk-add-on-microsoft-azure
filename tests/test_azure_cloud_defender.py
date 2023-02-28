@@ -39,7 +39,6 @@ def acd(ew):
         "index": index,
         "sourcetype": sourcetype,
     }
-    acd.event_writer = ew
     return acd
 
 
