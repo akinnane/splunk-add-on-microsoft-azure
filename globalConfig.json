@@ -2,7 +2,7 @@
     "meta": {
         "name": "TA-MS-AAD",
         "displayName": "Splunk Add-on for Microsoft Azure",
-        "version": "0.0.0R8c54704",
+        "version": "0.0.0Rc9f473d",
         "apiVersion": "3.0.0",
         "restRoot": "TA_MS_AAD",
         "schemaVersion": "0.0.3"
