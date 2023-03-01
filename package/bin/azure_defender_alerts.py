@@ -103,11 +103,18 @@ class ModInputazure_defender_alerts(AzureClient, base_mi.BaseModInput):
             r = r.result()
             for alert in r:
                 event = alert.serialize(keep_readonly=True)
-                event.setdefault("meta", {}).update(
-                    {"id": parse_resource_id(event["id"])}
-                )
 
-                # if event.get("properties", {}).get("entities", {})
+                meta = {
+                    entity.get("$id", "entity_id"): parse_resource_id(
+                        entity.get("resourceId", "")
+                    )
+                    for entity in event.get("properties", {}).get("entities", [])
+                    if entity.get("type", "") == "azure-resource"
+                }
+
+                meta.update({"id": parse_resource_id(event["id"])})
+
+                event.setdefault("meta", {}).update(meta)
 
                 event["SSPHP_RUN"] = self.ssphp_run
                 event1 = self.new_event(

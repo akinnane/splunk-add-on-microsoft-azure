@@ -51,4 +51,5 @@ def test_ada_collect_events(ada, ew):
     assert events
     for event in events:
         assert event
+        assert "meta" in event
         assert "SSPHP_RUN" in event
