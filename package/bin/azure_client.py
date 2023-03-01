@@ -74,3 +74,9 @@ class AzureClient:
     def list_alerts(self, subscription_id):
         alerts = self.security_center(subscription_id, "alerts").alerts.list()
         return alerts
+
+    def list_secure_scores(self, subscription_id):
+        scores = self.security_center(
+            subscription_id, "securescore"
+        ).secure_scores.list()
+        return scores

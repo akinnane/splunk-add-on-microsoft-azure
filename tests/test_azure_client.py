@@ -63,3 +63,13 @@ def test_list_alerts(az, ew, sub_ids):
         assert alerts
         for alert in alerts:
             assert alert
+
+
+@pytest.mark.live
+def test_list_secure_scores(az, ew, sub_ids):
+    for sub_id in sub_ids:
+        scores = list(az.list_secure_scores(sub_id))
+        assert scores
+        for score in scores:
+            assert score
+            print(score.serialize(keep_readonly=True))

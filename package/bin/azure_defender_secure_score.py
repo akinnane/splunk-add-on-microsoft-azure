@@ -6,10 +6,6 @@ from datetime import datetime
 import import_declare_test
 from msrestazure.tools import parse_resource_id
 
-from azure.mgmt.resource.resources.v2022_09_01.models import (
-    ResourceGroup,
-    ResourceGroupProperties,
-)
 from splunklib import modularinput as smi
 from splunktaucclib.modinput_wrapper import base_modinput as base_mi
 
@@ -18,15 +14,11 @@ from azure_client import AzureClient
 bin_dir = os.path.basename(__file__)
 
 
-ResourceGroup.enable_additional_properties_sending()
-ResourceGroupProperties.enable_additional_properties_sending()
-
-
-class ModInputazure_defender_alerts(AzureClient, base_mi.BaseModInput):
+class ModInputazure_defender_secure_score(AzureClient, base_mi.BaseModInput):
     def __init__(self):
         use_single_instance = False
-        super(ModInputazure_defender_alerts, self).__init__(
-            "ta_ms_aad", "azure_defender_alerts", use_single_instance
+        super(ModInputazure_defender_secure_score, self).__init__(
+            "ta_ms_aad", "azure_defender_secure_score", use_single_instance
         )
         self.global_checkbox_fields = None
         self.ssphp_run = datetime.now().timestamp()
@@ -34,8 +26,8 @@ class ModInputazure_defender_alerts(AzureClient, base_mi.BaseModInput):
 
     def get_scheme(self):
         """overloaded splunklib modularinput method"""
-        scheme = super(ModInputazure_defender_alerts, self).get_scheme()
-        scheme.title = "Azure Defender Alerts"
+        scheme = super(ModInputazure_defender_secure_score, self).get_scheme()
+        scheme.title = "Azure Defender Secure Score"
         scheme.description = "Go to the add-on's configuration UI and configure modular inputs under the Inputs menu."
         scheme.use_external_validation = True
         scheme.streaming_mode_xml = True
@@ -87,10 +79,10 @@ class ModInputazure_defender_alerts(AzureClient, base_mi.BaseModInput):
         results = []
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=5)
         for subscription_id in self.subscription_ids(subscriptions):
-            results.append(executor.submit(self.list_alerts, subscription_id))
+            results.append(executor.submit(self.list_secure_scores, subscription_id))
 
         metadata = {
-            "sourcetype": "azure:security:alert",
+            "sourcetype": "azure:security:score",
             "index": self.get_output_index(),
             "source": f"{self.input_type}",
         }
@@ -103,13 +95,10 @@ class ModInputazure_defender_alerts(AzureClient, base_mi.BaseModInput):
             r = r.result()
             for alert in r:
                 event = alert.serialize(keep_readonly=True)
+                event["SSPHP_RUN"] = self.ssphp_run
                 event.setdefault("meta", {}).update(
                     {"id": parse_resource_id(event["id"])}
                 )
-
-                # if event.get("properties", {}).get("entities", {})
-
-                event["SSPHP_RUN"] = self.ssphp_run
                 event1 = self.new_event(
                     data=json.dumps(event, sort_keys=True),
                     source=metadata["source"],
@@ -160,5 +149,5 @@ class ModInputazure_defender_alerts(AzureClient, base_mi.BaseModInput):
 
 
 if __name__ == "__main__":
-    exitcode = ModInputazure_defender_alerts().run(sys.argv)
+    exitcode = ModInputazure_defender_secure_score().run(sys.argv)
     sys.exit(exitcode)
