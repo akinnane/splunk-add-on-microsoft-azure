@@ -83,7 +83,6 @@ def test_list_secure_score_controls(az, ew, sub_ids):
         for ssc in sscs:
             print(ssc.serialize(keep_readonly=True))
             assert ssc
-    assert False
 
 
 @pytest.mark.live

@@ -25,7 +25,7 @@ ResourceGroupProperties.enable_additional_properties_sending()
 ENTITY_MAP = {
     "azure-resource": ["resourceId"],
     "ip": ["address", "isValid"],
-    "network-connection": ["protocol"],
+    "network-connection": ["protocol", "type"],
     "filehash": ["value"],
     "blob-container": ["name"],
     "file": ["name", "isValid"],
@@ -39,7 +39,7 @@ ENTITY_MAP = {
     "K8s-namespace": ["name"],
     "K8s-service": ["name"],
     "K8s-pod": ["name"],
-    "process": ["commandLine", "processId"],
+    "process": ["commandLine", "processId", "isValid"],
     "gcp-resource": ["resourceName"],
     "container-image": ["imageId"],
     "amazon-resource": ["amazonResourceId"],
