@@ -80,3 +80,15 @@ class AzureClient:
             subscription_id, "securescore"
         ).secure_scores.list()
         return scores
+
+    def list_secure_score_controls(self, subscription_id):
+        sscs = self.security_center(
+            subscription_id, "securescorecontrols"
+        ).secure_score_controls.list()
+        return sscs
+
+    def list_settings(self, subscription_id):
+        scores = self.security_center(
+            subscription_id, "settings"
+        ).secure_score_controls.list()
+        return scores

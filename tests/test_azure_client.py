@@ -71,5 +71,26 @@ def test_list_secure_scores(az, ew, sub_ids):
         scores = list(az.list_secure_scores(sub_id))
         assert scores
         for score in scores:
-            assert score
             print(score.serialize(keep_readonly=True))
+            assert score
+
+
+@pytest.mark.live
+def test_list_secure_score_controls(az, ew, sub_ids):
+    for sub_id in sub_ids:
+        sscs = list(az.list_secure_score_controls(sub_id))
+        assert sscs
+        for ssc in sscs:
+            print(ssc.serialize(keep_readonly=True))
+            assert ssc
+    assert False
+
+
+@pytest.mark.live
+def test_list_settings(az, ew, sub_ids):
+    for sub_id in sub_ids:
+        settings = list(az.list_settings(sub_id))
+        assert settings
+        for setting in settings:
+            print(setting.serialize(keep_readonly=True))
+            assert setting

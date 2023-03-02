@@ -22,6 +22,43 @@ ResourceGroup.enable_additional_properties_sending()
 ResourceGroupProperties.enable_additional_properties_sending()
 
 
+ENTITY_MAP = {
+    "azure-resource": ["resourceId"],
+    "ip": ["address", "isValid"],
+    "network-connection": ["protocol"],
+    "filehash": ["value"],
+    "blob-container": ["name"],
+    "file": ["name", "isValid"],
+    "blob": ["name"],
+    "malware": ["name"],
+    "account": ["name", "aadUserId", "aadTenantId"],
+    "url": ["url"],
+    "host": ["hostName", "isValid"],
+    "host-logon-session": ["sessionId", "startTimeUtc"],
+    "K8s-cluster": ["type"],  # Check
+    "K8s-namespace": ["name"],
+    "K8s-service": ["name"],
+    "K8s-pod": ["name"],
+    "process": ["commandLine", "processId"],
+    "gcp-resource": ["resourceName"],
+    "container-image": ["imageId"],
+    "amazon-resource": ["amazonResourceId"],
+    "container": ["name", "containerId"],
+    "dns": ["domainName"],
+}
+
+
+def entity_processor(entity):
+    t = entity["type"]
+    keys = ENTITY_MAP.get(t, [])
+    out = []
+    for key in keys:
+        value = entity.get(key)
+        if value is not None:
+            out.append(f"{t}:{key}={value}")
+    return out
+
+
 class ModInputazure_defender_alerts(AzureClient, base_mi.BaseModInput):
     def __init__(self):
         use_single_instance = False
@@ -113,6 +150,15 @@ class ModInputazure_defender_alerts(AzureClient, base_mi.BaseModInput):
                 }
 
                 meta.update({"id": parse_resource_id(event["id"])})
+
+                meta.update(
+                    {
+                        "entities": [
+                            entity_processor(e)
+                            for e in event.get("properties", {}).get("entities", [])
+                        ]
+                    }
+                )
 
                 event.setdefault("meta", {}).update(meta)
 

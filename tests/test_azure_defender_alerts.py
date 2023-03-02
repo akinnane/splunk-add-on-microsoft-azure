@@ -1,3 +1,4 @@
+import json
 import os
 
 import azure_defender_alerts
@@ -52,4 +53,13 @@ def test_ada_collect_events(ada, ew):
     for event in events:
         assert event
         assert "meta" in event
+        assert "entities" in event["meta"]
         assert "SSPHP_RUN" in event
+
+
+def test_entity_processor():
+    with open("entities.json") as f:
+        entities = json.load(f)
+    for entity in entities:
+        out = azure_defender_alerts.entity_processor(entity)
+        assert out
